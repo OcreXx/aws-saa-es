@@ -1,0 +1,14 @@
+# Material fuente y de referencia (no se publica en la web)
+# Quita estas líneas si quieres versionarlo en el repo.
+AWS SAA - Fundamentos de AWS.html
+DumpsBase/
+TheroyBase/
+
+# Sistema
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editores
+.vscode/
+.idea/

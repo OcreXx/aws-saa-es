@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AWS SAA · Estudia en Español</title>
+  <meta name="description" content="Plataforma ligera para estudiar la certificación AWS Solutions Architect Associate (SAA-C03) en español: teoría condensada y exámenes de práctica." />
+
+  <!-- Tipografía distintiva con fallback a fuentes del sistema -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- Difuminado naranja del fondo -->
+  <div class="glow glow--tr" aria-hidden="true"></div>
+  <div class="glow glow--bl" aria-hidden="true"></div>
+
+  <!-- ===== Barra de navegación ===== -->
+  <header class="nav" id="nav">
+    <a href="#/" class="nav__brand" aria-label="Inicio">
+      <span class="nav__logo" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="26" height="26" fill="none">
+          <path d="M4 20 L11 8 L18 20" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M14 20 L21 8 L28 20" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+          <path d="M6 24 Q16 28 26 24" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="nav__title">AWS <b>SAA</b><small>en español</small></span>
+    </a>
+    <nav class="nav__links">
+      <a href="#/" data-nav="home">Inicio</a>
+      <a href="#/teoria" data-nav="teoria">Teoría</a>
+      <a href="#/examenes" data-nav="examenes">Exámenes</a>
+    </nav>
+    <button class="nav__menu" id="navToggle" aria-label="Abrir menú">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <!-- ===== Contenido dinámico ===== -->
+  <main id="app" class="app"></main>
+
+  <!-- ===== Pie ===== -->
+  <footer class="footer">
+    <div class="footer__inner">
+      <p><b>AWS SAA en español</b> — Material de estudio para la certificación Solutions Architect Associate (SAA-C03).</p>
+      <p class="footer__note">Contenido educativo original. No son preguntas reales del examen oficial de AWS.</p>
+    </div>
+  </footer>
+
+  <script src="js/data-teoria.js"></script>
+  <script src="js/data-examenes.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
