@@ -360,6 +360,60 @@ b, strong { font-weight: 700; }
 .prose td { padding: 14px 20px; border-top: 1px solid var(--line-soft); color: var(--ink-soft); vertical-align: top; }
 .prose td:first-child { font-weight: 600; color: var(--ink); }
 
+/* ---------- Mapa conceptual (diagrama Mermaid) ---------- */
+.conceptmap {
+  margin: 0 0 40px;
+  padding: 20px 20px 24px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+}
+.conceptmap figcaption {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: .72rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--orange-deep);
+  margin-bottom: 14px;
+}
+.conceptmap .mermaid {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  background: none;
+  min-height: 40px;
+}
+.conceptmap .mermaid svg { max-width: 100%; height: auto; }
+/* Oculta el texto crudo del grafo mientras Mermaid no ha renderizado. */
+.conceptmap .mermaid:not([data-processed]) { color: transparent; font-size: 0; }
+
+/* ---------- Imágenes y figuras de la teoría ---------- */
+.prose img { max-width: 100%; height: auto; }
+.prose .figure { margin: 0 0 1.8em; }
+.prose .figure img {
+  display: block;
+  width: 100%;
+  max-width: 920px;
+  height: auto;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.prose .figure figcaption {
+  margin-top: 10px;
+  text-align: center;
+  font-size: .85rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
 /* =========================================================
    Preguntas / Quiz
    ========================================================= */
@@ -377,6 +431,7 @@ b, strong { font-weight: 700; }
 .q__idx { flex-shrink: 0; font-family: var(--font-display); font-weight: 800; font-size: .95rem; color: var(--orange-deep); background: var(--orange-tint); width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; }
 .q__text { font-weight: 600; font-size: 1.05rem; color: var(--ink); }
 .q__multi { display: inline-block; margin-top: 8px; font-size: .74rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--orange-deep); background: var(--orange-soft); padding: 3px 10px; border-radius: 999px; }
+.q__code { background: var(--ink); color: #F5F0EB; font-family: var(--font-mono); font-size: .8rem; line-height: 1.5; padding: 16px 18px; border-radius: var(--r-sm); overflow-x: auto; margin: 0 0 18px; }
 .q__opts { display: flex; flex-direction: column; gap: 10px; }
 .opt {
   display: flex; gap: 12px; align-items: flex-start;

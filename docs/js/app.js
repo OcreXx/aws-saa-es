@@ -26,7 +26,21 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const letter = (i) => "ABCDEFGH"[i] || "?";
   const findModulo = (id) => TEORIA.find((m) => m.id === id);
+  const findExamen = (id) => EXAMENES.find((e) => e.id === id);
   const totalPreguntas = () => TEORIA.reduce((n, m) => n + (m.preguntas ? m.preguntas.length : 0), 0);
+
+  /* ---------- Diagramas Mermaid (carga diferida desde CDN) ---------- */
+  function runMermaid(tries) {
+    const nodes = app.querySelectorAll(".mermaid:not([data-processed])");
+    if (!nodes.length) return;
+    if (window.mermaid && window.mermaid.run) {
+      window.mermaid.run({ nodes }).catch((e) => console.error("Mermaid:", e));
+    } else if ((tries || 0) < 25) {
+      setTimeout(() => runMermaid((tries || 0) + 1), 150);
+    }
+  }
+  // Permite que el script de Mermaid reintente el render al terminar de cargar.
+  window.__runMermaid = () => runMermaid(0);
 
   /* =========================================================
      Rutas
@@ -40,6 +54,7 @@
     if (parts.length === 0) return renderHome();
     if (parts[0] === "teoria" && parts[1]) return renderModulo(parts[1], parts[2]);
     if (parts[0] === "teoria") return renderTeoriaIndex();
+    if (parts[0] === "examenes" && parts[1]) return renderExamen(parts[1]);
     if (parts[0] === "examenes") return renderExamenes();
     return renderHome();
   }
@@ -189,6 +204,7 @@
             </div>
 
             <div ${activeTab !== "teoria" ? "hidden" : ""} data-panel="teoria">
+              ${m.diagrama ? `<figure class="conceptmap reveal"><figcaption>Mapa conceptual</figcaption><pre class="mermaid">${esc(m.diagrama)}</pre></figure>` : ""}
               <div class="prose reveal">${teoriaHTML}</div>
             </div>
 
@@ -202,8 +218,8 @@
 
     wireTabs(m);
     wireSidebar();
-    if (activeTab === "preguntas") wireQuiz();
-    else wireScrollSpy();
+    if (activeTab === "preguntas") wireQuiz(m.preguntas || [], () => renderModulo(m.id, "preguntas"));
+    else { wireScrollSpy(); runMermaid(0); }
   }
 
   /* ---------- Navegación por secciones (sidebar) ---------- */
@@ -251,8 +267,8 @@
         app.querySelectorAll("[data-panel]").forEach((p) => (p.hidden = p.dataset.panel !== target));
         const base = `#/teoria/${m.id}`;
         history.replaceState(null, "", target === "preguntas" ? base + "/preguntas" : base);
-        if (target === "preguntas") wireQuiz();
-        else wireScrollSpy();
+        if (target === "preguntas") wireQuiz(m.preguntas || [], () => renderModulo(m.id, "preguntas"));
+        else { wireScrollSpy(); runMermaid(0); }
       });
     });
   }
@@ -293,6 +309,7 @@
               ${multi ? `<span class="q__multi">Selecciona ${q.correctas.length}</span>` : ""}
             </div>
           </div>
+          ${q.codigo ? `<pre class="q__code"><code>${esc(q.codigo)}</code></pre>` : ""}
           <div class="q__opts">${opts}</div>
           <div class="q__explain" data-explain="${qi}">
             <span class="lbl">Explicación</span>
@@ -312,11 +329,10 @@
       </div>`;
   }
 
-  function wireQuiz() {
-    const panel = app.querySelector('[data-panel="preguntas"]');
+  function wireQuiz(preguntas, onReset) {
+    const panel = app.querySelector(".quiz");
     if (!panel) return;
-    const m = findModulo(location.hash.split("/")[2]);
-    const preguntas = (m && m.preguntas) || [];
+    preguntas = preguntas || [];
     const answered = {};      // qi -> bool (contabilizada)
     const picked = {};        // qi -> Set(oi)
 
@@ -373,7 +389,7 @@
     });
 
     panel.querySelector("[data-reset]").addEventListener("click", () => {
-      renderModulo(m.id, "preguntas");
+      if (typeof onReset === "function") onReset();
     });
   }
 
@@ -410,9 +426,46 @@
       <section class="pagehead wrap reveal">
         <div class="crumbs"><a href="#/">Inicio</a><span>/</span> Exámenes</div>
         <h1>Exámenes de práctica</h1>
-        <p>Simulacros al estilo del examen oficial SAA-C03.</p>
+        <p>Tests con preguntas de práctica al estilo del examen SAA-C03, con respuesta correcta y explicación.</p>
       </section>
       <section class="wrap"><div class="modgrid">${cards}</div></section>`;
+  }
+
+  /* ---------- Examen individual (quiz) ---------- */
+  function renderExamen(id) {
+    setActiveNav("examenes");
+    const e = findExamen(id);
+    if (!e) return renderExamenes();
+    const idx = EXAMENES.indexOf(e);
+    const prev = EXAMENES[idx - 1];
+    const next = EXAMENES[idx + 1];
+    const n = e.preguntas ? e.preguntas.length : 0;
+    const nav = (prev || next) ? `
+      <div class="exam-nav" style="display:flex;justify-content:space-between;gap:12px;margin-top:36px">
+        ${prev ? `<a class="btn btn--ghost" href="#/examenes/${prev.id}">${ICON.arrow} ${esc(prev.titulo)}</a>` : `<span></span>`}
+        ${next ? `<a class="btn btn--primary" href="#/examenes/${next.id}">${esc(next.titulo)} ${ICON.arrow}</a>` : `<span></span>`}
+      </div>` : "";
+
+    app.innerHTML = `
+      <section class="pagehead wrap reveal">
+        <div class="crumbs">
+          <a href="#/">Inicio</a><span>/</span>
+          <a href="#/examenes">Exámenes</a><span>/</span>
+          ${esc(e.titulo)}
+        </div>
+        <h1>${esc(e.titulo)}</h1>
+        <p>${esc(e.resumen || "")}</p>
+        <div class="modcard__foot" style="margin-top:16px;gap:22px">
+          <span>${ICON.help} ${n} preguntas</span>
+          <span>${ICON.target} Marca tu respuesta para ver la corrección</span>
+        </div>
+      </section>
+      <section class="wrap">
+        ${renderQuiz(e.preguntas || [])}
+        ${nav}
+      </section>`;
+
+    wireQuiz(e.preguntas || [], () => renderExamen(e.id));
   }
 
   /* =========================================================

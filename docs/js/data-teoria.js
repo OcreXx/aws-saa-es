@@ -284,9 +284,99 @@ window.TEORIA = [
   id: "02-iam",
   numero: 2,
   titulo: "IAM: Identidad y accesos",
-  resumen: "Usuarios, grupos, roles y políticas; evaluación de permisos, STS, federación y buenas prácticas de seguridad.",
+  resumen: "Usuarios, grupos, roles y políticas; evaluación de permisos, STS, federación, Organizations y SCP, políticas basadas en recursos, límites de permisos, Cognito, IAM Identity Center y buenas prácticas de seguridad.",
   peso: "~15–20%",
   tiempo: "45–60 min",
+  diagrama: `%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#232f3e', 'edgeLabelBackground':'#ffffff', 'tertiaryColor': '#fff'}}}%%
+graph TD
+    classDef global fill:#f2f3f3,stroke:#232f3e,stroke-width:2px,color:#232f3e,stroke-dasharray: 5 5;
+    classDef governance fill:#e6f7ff,stroke:#0073bb,stroke-width:2px,color:#0073bb;
+    classDef identity fill:#e9fbec,stroke:#1d8102,stroke-width:2px,color:#1d8102;
+    classDef compute fill:#fff0e6,stroke:#d87f0a,stroke-width:2px,color:#d87f0a;
+    classDef policy fill:#fff1f0,stroke:#cf1322,stroke-width:2px,color:#cf1322;
+    classDef audit fill:#f9f0ff,stroke:#722ed1,stroke-width:2px,color:#722ed1;
+    classDef storage fill:#e6fffb,stroke:#006d75,stroke-width:2px,color:#006d75;
+
+    subgraph Capa_Global ["CAPA 0: ORGANIZACIÓN Y GOBERNANZA (AWS Organizations)"]
+        direction TB
+        Org["AWS Organization"]:::global
+        ControlTower["AWS Control Tower"]:::governance
+        OU["Unidades Organizativas - OUs"]:::global
+        SCP["<b>SCP</b><br/>Service Control Policies"]:::policy
+
+        ControlTower -.->|Orquesta| Org
+        Org --> OU
+        OU -->|Aplica Techo de Permisos| SCP
+    end
+
+    subgraph Capa_Identidad ["CAPA 1: FUENTES DE IDENTIDAD Y FEDERACIÓN"]
+        direction LR
+        ExtIdP["Proveedor de Identidad Externo<br/>Okta / Azure AD / Ping"]:::identity
+        ADManaged["AWS Managed<br/>Microsoft AD"]:::identity
+    end
+
+    subgraph Capa_Acceso ["CAPA 2: CENTRO DE ACCESO CENTRALIZADO"]
+        direction TB
+        IdentityCenter["<b>AWS IAM Identity Center</b><br/>(successor to AWS SSO)"]:::identity
+        PermissionSets["Conjuntos de Permisos<br/>(Permission Sets)"]:::policy
+        IdentityCenter <-->|Sincroniza Usuarios y Grupos| ExtIdP
+        IdentityCenter <-->|Conecta| ADManaged
+        IdentityCenter -->|Define| PermissionSets
+    end
+
+    subgraph Capa_Cuenta ["CAPA 3: DENTRO DE LA CUENTA DE AWS"]
+
+        subgraph IAM_Local ["IAM Local de la Cuenta"]
+            direction TB
+            IAM_Roles["<b>Roles IAM</b><br/>(Asumidos centralmente o por servicios)"]:::compute
+            STS["AWS STS<br/>Tokens Temporales"]:::compute
+        end
+
+        subgraph Recursos ["Recursos y Controles"]
+            EC2["Instancia EC2"]:::compute
+            S3["Bucket S3"]:::storage
+            KMS["Clave KMS"]:::storage
+        end
+
+        subgraph Politicas_Locales ["Puntos de Control de Permisos"]
+            IdentityPolicy["Identity-based<br/>Policies"]:::policy
+            ResourcePolicy["Resource-based Policies<br/>(ej. S3 Bucket Policy)"]:::policy
+            PermBoundary["<b>Permissions Boundary</b><br/>(Límite de Delegación)"]:::policy
+        end
+
+        EC2 -->|Asume| IAM_Roles
+        STS -.->|Genera credenciales para| IAM_Roles
+
+        IAM_Roles -->|Evaluado por| IdentityPolicy
+        IAM_Roles -->|Evaluado por| PermBoundary
+        ResourcePolicy -.->|Protege a| S3
+        ResourcePolicy -.->|Protege a| KMS
+    end
+
+    subgraph Capa_App ["CAPA 4: IDENTIDADES PARA APLICACIONES (B2C/B2B)"]
+        direction TB
+        CUP["Cognito User Pools - CUP<br/>(Directorio de Usuarios de App)"]:::identity
+        CIP["Cognito Identity Pools - CIP<br/>(Autorización a AWS)"]:::compute
+        EndUsers["Usuarios Finales<br/>App Móvil/Web"]:::identity
+        EndUsers -->|Login| CUP
+        CUP -->|Token JWT| CIP
+        CIP -->|Intercambia por| STS
+    end
+
+    subgraph Capa_Auditoria ["CAPA 5: AUDITORÍA, SEGURIDAD Y MÍNIMO PRIVILEGIO"]
+        direction LR
+        AccessAdvisor["IAM Access Advisor<br/>(Análisis de último uso)"]:::audit
+        AccessAnalyzer["IAM Access Analyzer<br/>(Público / Cross-account)"]:::audit
+        CredReport["Credential Report<br/>(Auditoría de Cuenta)"]:::audit
+        CloudTrail["AWS CloudTrail<br/>(Registro de APIs)"]:::audit
+    end
+
+    IdentityCenter ==>|Despliega Roles y Políticas en| Capa_Cuenta
+    OU ==>|Contiene| Capa_Cuenta
+    SCP ==>|Gobierna| Capa_Cuenta
+    Capa_Cuenta -.-> CloudTrail
+    Capa_Cuenta -.-> AccessAdvisor
+    Capa_Cuenta -.-> AccessAnalyzer`,
   teoria: [
     {
       id: "componentes",
@@ -363,6 +453,9 @@ window.TEORIA = [
             <tr><td><code>aws:MultiFactorAuthPresent</code></td><td>Exigir MFA para operaciones sensibles</td></tr>
             <tr><td><code>aws:CurrentTime</code></td><td>Acceso solo en horario laboral</td></tr>
             <tr><td><code>aws:SecureTransport</code></td><td>Forzar HTTPS</td></tr>
+            <tr><td><code>aws:RequestedRegion</code></td><td>Limitar la región donde se hace la petición (p. ej. solo eu-west-1)</td></tr>
+            <tr><td><code>aws:PrincipalOrgID</code></td><td>Autorizar a toda una organización sin listar sus cuentas (en políticas de recurso)</td></tr>
+            <tr><td><code>ec2:ResourceTag/<em>clave</em></code></td><td>Permitir/denegar según la etiqueta del recurso EC2 (p. ej. <code>ec2:ResourceTag/Env = dev</code>)</td></tr>
           </tbody>
         </table></div>
         <h3>URLs prefirmadas (pre-signed URLs)</h3>
@@ -374,6 +467,92 @@ window.TEORIA = [
           <li>Usa roles para EC2/Lambda; rota las credenciales; nunca subas claves a repositorios.</li>
           <li>Si expones claves por error: <strong>desactívalas y elimínalas de inmediato</strong>, revisa CloudTrail y genera nuevas.</li>
         </ul>`
+    },
+    {
+      id: "organizations-scp",
+      titulo: "AWS Organizations: OU y SCP",
+      html: `
+        <p><strong>AWS Organizations</strong> agrupa varias cuentas AWS bajo una <strong>cuenta de gestión</strong> (management account): facturación consolidada y gobierno centralizado.</p>
+        <h3>Jerarquía: Raíz → OU → cuentas</h3>
+        <p>Las cuentas se organizan en un árbol. Las <strong>Unidades Organizativas (OU)</strong> agrupan cuentas por función o entorno (p. ej. <em>Producción</em>, <em>Desarrollo</em>, <em>Seguridad</em>, <em>Sandbox</em>) para aplicarles políticas en bloque. Las OU se pueden <strong>anidar</strong> (hasta 5 niveles).</p>
+        <h3>Service Control Policies (SCP)</h3>
+        <ul>
+          <li>Fijan el <strong>máximo de permisos</strong> (guardarraíl) de las cuentas de una OU o cuenta. <strong>No conceden permisos</strong>: solo limitan.</li>
+          <li>Permiso efectivo = <strong>política IAM ∩ SCP</strong>: la acción debe estar permitida en <em>ambas</em>.</li>
+          <li>Se <strong>heredan hacia abajo</strong>: una cuenta cumple las SCP de su OU y las de todas las OU superiores.</li>
+          <li><strong>No afectan a la cuenta de gestión</strong> (por eso no conviene alojar cargas en ella) ni a los <em>service-linked roles</em>.</li>
+        </ul>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Una SCP es un <strong>filtro</strong>, no una concesión. Aunque una SCP "permita" un servicio, la identidad sigue necesitando una política IAM que le conceda ese permiso.</p></div></div>
+        <p>Casos típicos: restringir regiones (<code>aws:RequestedRegion</code>), exigir cifrado, impedir <code>organizations:LeaveOrganization</code>, proteger CloudTrail/Config.</p>`
+    },
+    {
+      id: "recursos-s3-limites",
+      titulo: "Políticas basadas en recursos, S3 y límites de permisos",
+      html: `
+        <h3>¿Qué servicios admiten políticas basadas en recursos?</h3>
+        <p>Se asocian al <em>recurso</em> y su gran ventaja es que <strong>pueden indicar principals de otras cuentas</strong> → acceso <strong>entre cuentas sin asumir rol</strong>. No todos los servicios las soportan; los más preguntados:</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Servicio</th><th>Política basada en recursos</th></tr></thead>
+          <tbody>
+            <tr><td><strong>S3</strong></td><td>Política de bucket (bucket policy)</td></tr>
+            <tr><td><strong>SNS / SQS</strong></td><td>Política de acceso del topic / de la cola</td></tr>
+            <tr><td><strong>Lambda</strong></td><td>Política de recursos de la función o capa</td></tr>
+            <tr><td><strong>KMS</strong></td><td>Política de clave (key policy)</td></tr>
+            <tr><td><strong>CloudWatch Logs</strong></td><td>Resource policy (deja que otros servicios escriban logs)</td></tr>
+            <tr><td>EventBridge, Secrets Manager, ECR, API Gateway, EFS, VPC endpoints</td><td>También la admiten</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>En una política de recurso, <code>aws:PrincipalOrgID</code> autoriza a <strong>toda la organización</strong> sin listar cada cuenta (y sí incluye la cuenta de gestión).</p></div></div>
+        <h3>S3: política a nivel de bucket vs a nivel de objeto</h3>
+        <p>No existe una "política de objeto" aparte: la <strong>política de bucket controla ambos niveles</strong> según el ARN del <code>Resource</code>.</p>
+        <ul>
+          <li><strong>Acciones de bucket</strong> (<code>s3:ListBucket</code>, <code>s3:GetBucketPolicy</code>) → Resource = <code>arn:aws:s3:::mi-bucket</code> (sin <code>/*</code>).</li>
+          <li><strong>Acciones de objeto</strong> (<code>s3:GetObject</code>, <code>s3:PutObject</code>, <code>s3:DeleteObject</code>) → Resource = <code>arn:aws:s3:::mi-bucket/*</code> (o un prefijo <code>.../carpeta/*</code>).</li>
+        </ul>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>Trampa clásica: <code>s3:ListBucket</code> es permiso <strong>de bucket</strong>; apúntalo al ARN del bucket, <strong>no</strong> a <code>/*</code>. Las ACL (heredadas) actúan a nivel de bucket y de objeto, pero AWS recomienda desactivarlas (<em>Bucket owner enforced</em>) y usar políticas.</p></div></div>
+        <h3>Límites de permisos (permissions boundaries)</h3>
+        <p>Política gestionada que se adjunta a <strong>una identidad IAM concreta</strong> (usuario o rol) y fija su <strong>techo</strong> de permisos. Por sí sola no concede nada: permiso efectivo = <strong>política de identidad ∩ límite</strong>.</p>
+        <p>Uso típico: <strong>delegación segura</strong> — dejar que un administrador junior cree roles/usuarios sin que puedan escalar privilegios por encima del límite.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Mecanismo</th><th>Alcance</th><th>¿Concede permisos?</th></tr></thead>
+          <tbody>
+            <tr><td>Política de identidad</td><td>Usuario / grupo / rol</td><td>Sí</td></tr>
+            <tr><td>Política de recurso</td><td>El recurso (S3, SQS…)</td><td>Sí (admite otras cuentas)</td></tr>
+            <tr><td>Límite de permisos</td><td>Una identidad IAM</td><td>No, solo limita</td></tr>
+            <tr><td>SCP</td><td>Cuenta / OU entera</td><td>No, solo limita</td></tr>
+          </tbody>
+        </table></div>`
+    },
+    {
+      id: "herramientas-integracion",
+      titulo: "Herramientas de control e integración con IAM",
+      html: `
+        <h3>Amazon Cognito: User Pools (CUP) vs Identity Pools (CIP)</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th></th><th>User Pool (CUP)</th><th>Identity Pool (CIP)</th></tr></thead>
+          <tbody>
+            <tr><td>Para qué</td><td>Autenticación: directorio de usuarios de tu app (registro/login, MFA, federación social/SAML/OIDC)</td><td>Autorización: canjea una identidad por <strong>credenciales AWS temporales</strong> (vía STS)</td></tr>
+            <tr><td>Devuelve</td><td>Tokens JWT (quién eres)</td><td>Credenciales AWS para acceder a S3, DynamoDB… (qué puedes tocar)</td></tr>
+            <tr><td>Invitados</td><td>No</td><td>Sí (acceso guest)</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p><strong>CUP = quién eres; CIP = qué puedes hacer en AWS.</strong> Se suelen combinar: el user pool autentica y el identity pool entrega las credenciales AWS.</p></div></div>
+        <h3>IAM Identity Center (antes AWS SSO)</h3>
+        <p>Acceso <strong>centralizado de la plantilla</strong> a <strong>varias cuentas</strong> de la organización y a apps SaaS con un único inicio de sesión. Usa su directorio propio o un IdP externo (AD, Okta, Entra ID) vía SAML. Los <strong>permission sets</strong> se despliegan como roles en cada cuenta. Es la opción recomendada frente a usuarios IAM de larga duración para el acceso humano.</p>
+        <h3>AWS Directory Service (AD gestionado)</h3>
+        <ul>
+          <li><strong>AWS Managed Microsoft AD:</strong> un Active Directory real gestionado en AWS; para cargas que dependen de AD (Windows, SQL Server, RDS for SQL Server) y para confianzas con el AD on-premises.</li>
+          <li><strong>AD Connector:</strong> redirige la autenticación al AD on-premises (no almacena usuarios en AWS).</li>
+          <li><strong>Simple AD:</strong> directorio pequeño/básico compatible con AD, sin funciones avanzadas.</li>
+        </ul>
+        <h3>AWS Control Tower</h3>
+        <p>Configura y gobierna un entorno <strong>multicuenta</strong> seguro (landing zone) sobre Organizations, con buenas prácticas: <strong>controls/guardrails</strong> (preventivos con SCP, detectivos con Config), <strong>Account Factory</strong> para aprovisionar cuentas estandarizadas y un panel de cumplimiento.</p>
+        <h3>Auditoría de IAM: Credential Report y Access Advisor</h3>
+        <ul>
+          <li><strong>Credential Report:</strong> informe CSV a nivel de cuenta con todos los usuarios y el estado de sus credenciales (edad de las claves, MFA, contraseña, último uso). Para auditoría y cumplimiento (uno cada 4 h como máximo).</li>
+          <li><strong>Access Advisor</strong> (datos de último acceso a servicios): muestra qué servicios ha usado realmente una identidad y cuándo, para <strong>recortar permisos hacia el mínimo privilegio</strong>.</li>
+        </ul>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>No confundir: <strong>Access Advisor</strong> ayuda a quitar permisos no usados; <strong>IAM Access Analyzer</strong> detecta recursos compartidos con entidades <em>externas</em> a tu zona de confianza.</p></div></div>`
     }
   ],
   preguntas: [
@@ -499,6 +678,100 @@ window.TEORIA = [
       opciones: ["Credenciales de usuario IAM", "URLs prefirmadas de S3", "Política de bucket de S3", "Un rol IAM"],
       correctas: [1],
       explicacion: "Las URLs prefirmadas conceden acceso limitado en el tiempo a un objeto sin que el usuario final necesite credenciales AWS; caducan tras la duración indicada."
+    },
+    {
+      pregunta: "Una empresa quiere impedir que TODAS las cuentas de la OU 'Producción' usen regiones fuera de eu-west-1, sin que los administradores de cada cuenta puedan saltárselo. ¿Qué usar?",
+      opciones: [
+        "Una política IAM en cada cuenta con condición aws:RequestedRegion",
+        "Una SCP en la OU que deniegue acciones fuera de eu-west-1",
+        "Un límite de permisos en cada rol",
+        "Una regla de AWS Config sobre la región"
+      ],
+      correctas: [1],
+      explicacion: "Las SCP son guardarraíles centralizados que los administradores de las cuentas miembro no pueden anular, y se heredan por toda la OU. Una política IAM la puede cambiar el admin de la cuenta, un límite de permisos solo afecta a una identidad y Config es detectivo, no preventivo."
+    },
+    {
+      pregunta: "Se quiere permitir que cualquier cuenta de la organización acceda a una cola SQS, sin tener que listar cada ID de cuenta y manteniéndolo al día. ¿Cómo?",
+      opciones: [
+        "Añadir cada cuenta como Principal en la política de la cola",
+        "Usar una política de recurso en la cola con la condición aws:PrincipalOrgID",
+        "Crear un usuario IAM compartido",
+        "Hacer la cola pública"
+      ],
+      correctas: [1],
+      explicacion: "aws:PrincipalOrgID en la política basada en recursos autoriza a toda la organización con un solo valor (el ID de la organización), sin enumerar cuentas; se actualiza solo al añadir cuentas nuevas."
+    },
+    {
+      pregunta: "¿Cuál de estos servicios permite conceder acceso entre cuentas mediante una política basada en recursos asociada directamente al recurso?",
+      opciones: ["Amazon EC2", "Amazon S3", "Amazon RDS", "Amazon EBS"],
+      correctas: [1],
+      explicacion: "S3 admite políticas de bucket (basadas en recursos) que pueden indicar principals de otras cuentas. Servicios como S3, SNS, SQS, Lambda, KMS o CloudWatch Logs las soportan; EC2, RDS o EBS no usan políticas basadas en recursos."
+    },
+    {
+      pregunta: "En una política de bucket de S3, ¿qué ARN de Resource corresponde a la acción s3:ListBucket?",
+      opciones: [
+        "arn:aws:s3:::mi-bucket/*",
+        "arn:aws:s3:::mi-bucket",
+        "Ambos ARNs a la vez",
+        "arn:aws:s3:::*/mi-bucket"
+      ],
+      correctas: [1],
+      explicacion: "s3:ListBucket es un permiso a nivel de bucket, así que su Resource es el ARN del bucket (sin /*). Las acciones sobre objetos (GetObject, PutObject) sí usan el ARN con /*."
+    },
+    {
+      pregunta: "Se quiere dejar que un administrador junior cree roles IAM, garantizando que esos roles nunca tengan más permisos que un conjunto máximo definido. ¿Qué mecanismo aplica ese techo a cada identidad creada?",
+      opciones: [
+        "Una SCP",
+        "Un límite de permisos (permissions boundary)",
+        "Una política de recurso",
+        "Una URL prefirmada"
+      ],
+      correctas: [1],
+      explicacion: "El límite de permisos fija el techo de una identidad IAM concreta: aunque su política conceda más, el permiso efectivo es la intersección. La SCP también limita, pero a nivel de cuenta/OU entera, no por identidad."
+    },
+    {
+      pregunta: "Una app móvil debe autenticar a sus usuarios y, tras el login, darles acceso temporal a un bucket S3 propio de cada usuario. ¿Qué combinación de Cognito usar?",
+      opciones: [
+        "Solo un User Pool",
+        "Solo un Identity Pool",
+        "User Pool para autenticar + Identity Pool para obtener credenciales AWS temporales",
+        "Un rol IAM por usuario"
+      ],
+      correctas: [2],
+      explicacion: "El User Pool (CUP) autentica y emite tokens; el Identity Pool (CIP) canjea ese token por credenciales AWS temporales vía STS para acceder a S3. CUP = quién eres, CIP = qué puedes tocar en AWS."
+    },
+    {
+      pregunta: "Una organización con 40 cuentas AWS quiere que sus empleados inicien sesión una vez y accedan a las cuentas que les correspondan, integrándose con su IdP corporativo. ¿Qué servicio es el más adecuado?",
+      opciones: [
+        "Crear usuarios IAM en cada cuenta",
+        "IAM Identity Center con permission sets",
+        "Amazon Cognito Identity Pools",
+        "AD Connector"
+      ],
+      correctas: [1],
+      explicacion: "IAM Identity Center centraliza el acceso de la plantilla a múltiples cuentas de Organizations con SSO, se integra con un IdP externo vía SAML y despliega permisos como permission sets (roles) en cada cuenta, evitando usuarios IAM de larga duración."
+    },
+    {
+      pregunta: "Una empresa migra a AWS aplicaciones Windows que dependen de Active Directory y quiere un AD gestionado en AWS con relación de confianza hacia su AD on-premises. ¿Qué opción de AWS Directory Service encaja?",
+      opciones: [
+        "Simple AD",
+        "AD Connector",
+        "AWS Managed Microsoft AD",
+        "Amazon Cognito"
+      ],
+      correctas: [2],
+      explicacion: "AWS Managed Microsoft AD es un Active Directory real gestionado en AWS, apto para cargas dependientes de AD y para establecer relaciones de confianza con el AD on-premises. AD Connector solo redirige la autenticación al AD local y Simple AD es básico."
+    },
+    {
+      pregunta: "El equipo de seguridad quiere identificar y retirar permisos que un rol tiene concedidos pero que nunca ha utilizado. ¿Qué herramienta lo indica?",
+      opciones: [
+        "IAM Access Advisor (datos de último acceso a servicios)",
+        "IAM Access Analyzer",
+        "El Credential Report",
+        "AWS CloudTrail Insights"
+      ],
+      correctas: [0],
+      explicacion: "Access Advisor muestra qué servicios ha usado realmente la identidad y cuándo, lo que permite recortar hacia el mínimo privilegio. Access Analyzer, en cambio, detecta recursos compartidos con entidades externas; el Credential Report audita el estado de las credenciales."
     }
   ]
 }
@@ -509,7 +782,7 @@ window.TEORIA = [
   id: "03-computo",
   numero: 3,
   titulo: "Cómputo",
-  resumen: "EC2 y modelos de precios, balanceadores de carga, Auto Scaling, Lambda, contenedores y opciones híbridas.",
+  resumen: "EC2 y modelos de precios, balanceadores de carga (ALB/NLB, sticky sessions, cross-zone), ENI e IP elástica, Auto Scaling, Lambda, contenedores y opciones híbridas.",
   peso: "~20–25%",
   tiempo: "60–90 min",
   teoria: [
@@ -537,12 +810,55 @@ window.TEORIA = [
         <div class="tablewrap"><table>
           <thead><tr><th>Tipo</th><th>Capa</th><th>Protocolo</th><th>Uso</th><th>Rasgo clave</th></tr></thead>
           <tbody>
-            <tr><td><strong>ALB</strong></td><td>7</td><td>HTTP/HTTPS</td><td>Microservicios, contenedores</td><td>Enrutado por ruta/host, targets Lambda</td></tr>
-            <tr><td><strong>NLB</strong></td><td>4</td><td>TCP/UDP/TLS</td><td>Rendimiento extremo</td><td><strong>IP estática</strong>, millones de peticiones/s</td></tr>
-            <tr><td><strong>GWLB</strong></td><td>3</td><td>IP</td><td>Appliances de seguridad</td><td>Firewalls, IDS/IPS</td></tr>
+            <tr><td><strong>ALB</strong></td><td>7</td><td>HTTP/HTTPS</td><td>Web, microservicios, contenedores</td><td>Enrutado por ruta/host/cabecera, targets Lambda</td></tr>
+            <tr><td><strong>NLB</strong></td><td>4</td><td>TCP/UDP/TLS</td><td>Rendimiento extremo, protocolos no HTTP</td><td><strong>IP estática/EIP por AZ</strong>, millones de peticiones/s</td></tr>
+            <tr><td><strong>GWLB</strong></td><td>3</td><td>IP</td><td>Appliances de seguridad</td><td>Firewalls, IDS/IPS de terceros</td></tr>
           </tbody>
         </table></div>
-        <div class="callout callout--key"><div class="callout__icon">★</div><div><p><strong>ALB</strong> para enrutar por ruta (<code>/api</code>, <code>/imagenes</code>) o por host. <strong>NLB</strong> cuando pidan IP estática, TCP/UDP o rendimiento extremo.</p></div></div>`
+        <h3>ALB (Application Load Balancer) en detalle</h3>
+        <ul>
+          <li>Opera en <strong>capa 7</strong>: entiende HTTP/HTTPS y puede <strong>enrutar por ruta</strong> (<code>/api</code>, <code>/imagenes</code>), <strong>por host</strong> (<code>api.ejemplo.com</code>), por cabecera, método o query string.</li>
+          <li>Tipos de <strong>target</strong>: instancias EC2, direcciones IP, <strong>funciones Lambda</strong> y contenedores (ECS/EKS).</li>
+          <li>Soporta <strong>WebSocket</strong> y <strong>HTTP/2</strong>, redirecciones, respuestas fijas y <strong>varios certificados TLS</strong> en un mismo listener con <strong>SNI</strong>.</li>
+          <li>Se integra con <strong>AWS WAF</strong> (filtrado a nivel de aplicación) y con <strong>Cognito/OIDC</strong> para autenticar usuarios antes de llegar al backend.</li>
+        </ul>
+        <h3>NLB (Network Load Balancer) en detalle</h3>
+        <ul>
+          <li>Opera en <strong>capa 4</strong> (TCP/UDP/TLS): elígelo cuando pidan <strong>rendimiento extremo</strong> (millones de peticiones/s, latencia de microsegundos) o <strong>protocolos que no son HTTP</strong>.</li>
+          <li>Ofrece una <strong>IP estática por AZ</strong> (y puedes asociarle una <strong>Elastic IP</strong>), útil cuando el cliente necesita fijar la IP de destino en un firewall (allow-list).</li>
+          <li><strong>Preserva la IP de origen</strong> del cliente y es el frontal de <strong>PrivateLink</strong> (exponer un servicio de forma privada a otras VPC/cuentas).</li>
+        </ul>
+        <h3>Sticky sessions (afinidad de sesión)</h3>
+        <p>Hacen que un mismo cliente vaya siempre al <strong>mismo target</strong>, útil si el estado de sesión se guarda en la instancia. El ALB usa una <strong>cookie</strong> (generada por él, <em>duration-based</em>, o propia de la app, <em>application-based</em>); el NLB fija la afinidad por <strong>IP de origen</strong>.</p>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Las sticky sessions son un parche: si el target falla, se pierde la sesión. Lo recomendado es guardar la sesión en un almacén <strong>externo</strong> (ElastiCache/DynamoDB) y dejar la arquitectura sin estado.</p></div></div>
+        <h3>Balanceo entre zonas (cross-zone load balancing)</h3>
+        <p>Con cross-zone <strong>activado</strong>, cada nodo del balanceador reparte el tráfico entre los targets de <strong>todas las AZ</strong> por igual; <strong>desactivado</strong>, solo reparte entre los de su propia AZ (puede desequilibrar la carga si hay distinto número de targets por AZ).</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th></th><th>ALB</th><th>NLB</th></tr></thead>
+          <tbody>
+            <tr><td>Por defecto</td><td><strong>Activado</strong> (siempre)</td><td>Desactivado</td></tr>
+            <tr><td>Coste entre AZ</td><td>Gratis</td><td>Se cobra transferencia entre AZ si se activa</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p><strong>ALB</strong> para enrutar por ruta/host o autenticar con Cognito/WAF. <strong>NLB</strong> cuando pidan IP estática/EIP, TCP/UDP, preservar la IP de origen o rendimiento extremo.</p></div></div>`
+    },
+    {
+      id: "eni-eip",
+      titulo: "ENI e IP elástica",
+      html: `
+        <h3>ENI (Elastic Network Interface)</h3>
+        <p>Una <strong>ENI</strong> es una <strong>tarjeta de red virtual</strong> que se conecta a una instancia dentro de una subred (una AZ). Cada ENI puede tener:</p>
+        <ul>
+          <li>Una <strong>IP privada principal</strong> (y varias secundarias) del rango de la subred.</li>
+          <li>Una <strong>IP elástica</strong> y/o una IP pública, una <strong>MAC</strong> propia y uno o varios <strong>grupos de seguridad</strong>.</li>
+        </ul>
+        <p>Una ENI se puede <strong>desasociar de una instancia y asociar a otra</strong> (en la misma AZ), moviendo con ella su IP y su configuración de red: útil para <strong>failover</strong> (IP flotante entre un nodo activo y uno de respaldo) o para tener una <strong>interfaz de gestión</strong> separada.</p>
+        <h3>IP elástica (Elastic IP)</h3>
+        <ul>
+          <li>Es una <strong>IPv4 pública estática</strong> asociada a tu cuenta que puedes <strong>remapear</strong> entre instancias o ENI en segundos (enmascara el fallo de una instancia reasignándola a otra).</li>
+          <li>Sirve cuando necesitas una <strong>IP pública fija</strong> (allow-lists de terceros). Para no depender de EIP, suele ser mejor usar un <strong>DNS con Route 53</strong> o un balanceador delante.</li>
+        </ul>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>AWS <strong>cobra por las IP elásticas</strong> (y por IPv4 públicas en general). Libera las que no uses. Una EIP vive en una sola región.</p></div></div>`
     },
     {
       id: "autoscaling",
@@ -717,7 +1033,7 @@ window.TEORIA = [
   id: "04-almacenamiento",
   numero: 4,
   titulo: "Almacenamiento",
-  resumen: "S3 y sus clases, cifrado y ciclo de vida; volúmenes EBS, almacenamiento efímero y sistemas de archivos EFS/FSx.",
+  resumen: "S3 (bucket/objeto/prefijo, clases, cifrado, ciclo de vida, seguridad y funciones como Select, CORS, URLs prefirmadas y Access Points); volúmenes EBS, almacenamiento efímero y sistemas de archivos EFS/FSx.",
   peso: "~15–20%",
   tiempo: "60–75 min",
   teoria: [
@@ -736,6 +1052,19 @@ window.TEORIA = [
         </table></div>
         <p style="font-size:.9rem;color:var(--muted)">* io1/io2 admiten multi-attach dentro de la misma AZ.</p>
         <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Palabras clave: "compartido entre varias instancias" → <strong>EFS</strong> (no EBS). "temporal / se puede perder / caché" → <strong>Instance Store</strong>. "base de datos / persistente" → <strong>EBS</strong>.</p></div></div>`
+    },
+    {
+      id: "conceptos-s3",
+      titulo: "S3: bucket, objeto, clave y prefijo",
+      html: `
+        <p>Amazon S3 guarda <strong>objetos</strong> dentro de <strong>buckets</strong>. Es almacenamiento <strong>plano</strong> (no hay carpetas reales): la jerarquía es una convención de nombres.</p>
+        <ul>
+          <li><strong>Bucket:</strong> el contenedor. Su nombre es <strong>único a nivel global</strong> (en todo AWS) y vive en una <strong>región</strong> concreta.</li>
+          <li><strong>Objeto:</strong> el archivo en sí (hasta <strong>5 TB</strong>) más sus metadatos. Cada objeto se identifica por su <strong>clave (key)</strong>.</li>
+          <li><strong>Clave (key):</strong> el <strong>nombre completo</strong> del objeto dentro del bucket, p. ej. <code>facturas/2024/enero.pdf</code>. La URL resultante es <code>https://mi-bucket.s3.amazonaws.com/facturas/2024/enero.pdf</code>.</li>
+          <li><strong>Prefijo (prefix):</strong> la parte de la clave antes del último <code>/</code> (<code>facturas/2024/</code>). No son carpetas reales, pero permiten <strong>organizar</strong> y <strong>filtrar</strong> (reglas de ciclo de vida, permisos, listados).</li>
+        </ul>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>El rendimiento de S3 escala <strong>por prefijo</strong> (3.500 escrituras y 5.500 lecturas por segundo y prefijo). Repartir las claves en varios prefijos multiplica el rendimiento.</p></div></div>`
     },
     {
       id: "clases-s3",
@@ -779,6 +1108,38 @@ window.TEORIA = [
           </tbody>
         </table></div>
         <p>Para acceder a S3 desde una VPC sin internet ni NAT, usa un <strong>VPC Gateway Endpoint</strong> (gratuito, solo S3 y DynamoDB).</p>`
+    },
+    {
+      id: "seguridad-s3",
+      titulo: "Seguridad y control de acceso en S3",
+      html: `
+        <p>El acceso a S3 se decide combinando varios niveles (basta con que uno conceda y que ninguno deniegue explícitamente):</p>
+        <h3>Políticas basadas en identidad (IAM)</h3>
+        <p>Se adjuntan a un <strong>usuario, grupo o rol</strong> de IAM y definen qué acciones de S3 puede hacer ese principal y sobre qué recursos. Ideales cuando el control gira en torno a <strong>quién</strong> accede (dentro de tu cuenta).</p>
+        <h3>Políticas basadas en recurso (bucket policy)</h3>
+        <ul>
+          <li>Se adjuntan al <strong>bucket</strong> (en JSON) y controlan el acceso al bucket y a sus objetos. Son la forma habitual de conceder acceso <strong>entre cuentas</strong> o de imponer condiciones globales.</li>
+          <li>Casos típicos: exigir cifrado en la subida (<code>s3:x-amz-server-side-encryption</code>), forzar HTTPS (<code>aws:SecureTransport</code>) o restringir por VPC endpoint o IP de origen.</li>
+        </ul>
+        <h3>ACL de bucket y de objeto (heredado)</h3>
+        <p>Las <strong>ACL</strong> son un mecanismo antiguo y de grano grueso que concede permisos a nivel de bucket o de objeto individual. AWS <strong>recomienda desactivarlas</strong> con <strong>S3 Object Ownership</strong> (opción "Bucket owner enforced"), para gobernarlo todo solo con políticas.</p>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Regla práctica: <strong>políticas de identidad (IAM)</strong> para "quién de mi cuenta", <strong>bucket policy</strong> para acceso entre cuentas o condiciones globales, y <strong>evita las ACL</strong>. Mantén el <strong>Block Public Access</strong> activado salvo que necesites explícitamente contenido público.</p></div></div>`
+    },
+    {
+      id: "s3-avanzado",
+      titulo: "S3 Select, CORS, URLs prefirmadas y Access Points",
+      html: `
+        <h3>S3 Select y Glacier Select</h3>
+        <p>Permiten recuperar <strong>solo un subconjunto</strong> de los datos de un objeto usando <strong>SQL</strong> (sobre CSV, JSON o Parquet), en vez de descargar el objeto entero: reduce datos transferidos y coste. <strong>Glacier Select</strong> hace lo mismo directamente sobre objetos archivados en Glacier.</p>
+        <h3>CORS (Cross-Origin Resource Sharing)</h3>
+        <p>Configuración que permite que una web servida desde un <strong>origen</strong> (dominio) haga peticiones a un bucket de <strong>otro origen</strong>. Sin la regla CORS adecuada en el bucket, el navegador bloquea esas peticiones cruzadas.</p>
+        <h3>URLs prefirmadas (pre-signed URLs)</h3>
+        <p>Una URL <strong>temporal</strong> que concede acceso a un objeto (subida o descarga) <strong>con los permisos de quien la genera</strong> y una <strong>caducidad</strong>. Ideal para dar acceso puntual a un objeto privado sin hacerlo público ni crear usuarios (p. ej. "descarga esta factura durante 15 minutos").</p>
+        <h3>Puntos de acceso (Access Points)</h3>
+        <ul>
+          <li>Endpoints con <strong>nombre y política propios</strong> para un bucket compartido: en vez de una bucket policy gigante, cada aplicación o equipo usa su <strong>propio access point</strong> con permisos acotados.</li>
+          <li>Pueden restringirse a una <strong>VPC</strong> (acceso solo privado). Los <strong>Multi-Region Access Points</strong> dan un único endpoint global que enruta a la copia de S3 más cercana.</li>
+        </ul>`
     },
     {
       id: "ebs",
@@ -928,7 +1289,7 @@ window.TEORIA = [
   id: "05-bases-datos",
   numero: 5,
   titulo: "Bases de datos",
-  resumen: "RDS y Aurora, alta disponibilidad y réplicas, DynamoDB, caché con ElastiCache, Redshift y bases especializadas.",
+  resumen: "RDS y Aurora (endpoints, clonación, RDS Proxy, cifrado y acceso), alta disponibilidad y réplicas, DynamoDB, caché con ElastiCache (Redis vs Memcached y patrones), Redshift y bases especializadas.",
   peso: "~15–20%",
   tiempo: "60–75 min",
   teoria: [
@@ -963,6 +1324,41 @@ window.TEORIA = [
           <li>Hasta <strong>15 réplicas de lectura</strong>, failover automático &lt; 30 s y <strong>Backtrack</strong> (rebobinar sin restaurar).</li>
           <li><strong>Aurora Serverless:</strong> escala el cómputo automáticamente y pagas por segundo; ideal para cargas impredecibles o con inactividad.</li>
           <li><strong>Aurora Global Database:</strong> réplica entre regiones en &lt; 1 s, para apps globales y DR.</li>
+        </ul>
+        <h3>Endpoints de Aurora</h3>
+        <ul>
+          <li><strong>Cluster (writer):</strong> apunta siempre al nodo de <strong>escritura</strong>; sigue automáticamente el failover.</li>
+          <li><strong>Reader:</strong> reparte las <strong>lecturas</strong> entre todas las réplicas (balanceo automático).</li>
+          <li><strong>Custom (personalizado):</strong> un endpoint para un <strong>subconjunto</strong> de instancias que elijas (p. ej. dirigir la analítica a réplicas más grandes).</li>
+          <li><strong>Instance:</strong> apunta a una instancia concreta (uso puntual/diagnóstico).</li>
+        </ul>
+        <h3>Otras capacidades de Aurora</h3>
+        <ul>
+          <li><strong>Clonación rápida (copy-on-write):</strong> crea una copia de la base de datos casi al instante y sin duplicar el almacenamiento (solo se copian los bloques que cambian). Ideal para montar entornos de prueba con datos de producción.</li>
+          <li><strong>Aurora Machine Learning:</strong> integra <strong>SageMaker</strong> y <strong>Comprehend</strong> para invocar predicciones de ML <strong>desde SQL</strong>, sin mover los datos.</li>
+          <li><strong>Aurora Multi-Master:</strong> permite <strong>varios nodos de escritura</strong> a la vez (disponibilidad de escritura continua). Es una opción especializada y con limitaciones; para la mayoría de casos basta con un writer + réplicas de lectura.</li>
+        </ul>`
+    },
+    {
+      id: "rds-seguridad",
+      titulo: "RDS Proxy y seguridad de RDS/Aurora",
+      html: `
+        <h3>RDS Proxy</h3>
+        <p>Un <strong>proxy de conexiones gestionado</strong> que se sitúa entre la aplicación y la base de datos (RDS/Aurora):</p>
+        <ul>
+          <li><strong>Agrupa y reutiliza conexiones (pooling):</strong> evita agotar las conexiones cuando hay muchos clientes, típico de <strong>Lambda</strong> y apps serverless con picos.</li>
+          <li>Reduce el tiempo de <strong>failover</strong> (hasta ~66%) y ofrece un punto de conexión estable.</li>
+          <li>Permite autenticación con <strong>IAM</strong> y guardar las credenciales en <strong>Secrets Manager</strong>.</li>
+        </ul>
+        <h3>Cifrado</h3>
+        <ul>
+          <li><strong>En reposo</strong> con <strong>KMS</strong>: debe activarse <strong>al crear</strong> la instancia. Para cifrar una BD existente, se restaura un snapshot cifrado en una instancia nueva. Cubre datos, backups automáticos, snapshots y réplicas.</li>
+          <li><strong>En tránsito</strong> con <strong>SSL/TLS</strong> entre la aplicación y la base de datos.</li>
+        </ul>
+        <h3>Control de acceso</h3>
+        <ul>
+          <li><strong>Red:</strong> la BD vive en <strong>subredes privadas</strong>, protegida por <strong>grupos de seguridad</strong> (que permiten solo el SG de la capa de aplicación).</li>
+          <li><strong>Permisos:</strong> <strong>IAM</strong> controla quién administra la instancia (acciones de la API), mientras que el acceso a los datos usa credenciales de BD o <strong>autenticación IAM</strong>.</li>
         </ul>`
     },
     {
@@ -1013,13 +1409,23 @@ window.TEORIA = [
         <div class="tablewrap"><table>
           <thead><tr><th></th><th>Redis</th><th>Memcached</th></tr></thead>
           <tbody>
-            <tr><td>Tipos de datos</td><td>Complejos (listas, sets)</td><td>Simples (strings)</td></tr>
-            <tr><td>Persistencia / backup</td><td>Sí</td><td>No</td></tr>
-            <tr><td>Replicación / Multi-AZ</td><td>Sí</td><td>No</td></tr>
+            <tr><td>Tipos de datos</td><td>Complejos (listas, sets, hashes, sorted sets)</td><td>Simples (strings/objetos)</td></tr>
+            <tr><td>Persistencia / backup</td><td>Sí (snapshots)</td><td>No</td></tr>
+            <tr><td>Replicación / Multi-AZ / failover</td><td>Sí</td><td>No</td></tr>
             <tr><td>Multi-hilo</td><td>No</td><td>Sí</td></tr>
+            <tr><td>Escalado</td><td>Réplicas de lectura y sharding (cluster mode)</td><td>Horizontal añadiendo nodos</td></tr>
           </tbody>
         </table></div>
-        <p>Se pone <strong>delante de la base de datos</strong> para reducir carga de lectura y acelerar respuestas (patrón cache-aside). Redis = funciones ricas y persistencia; Memcached = caché simple.</p>
+        <p>Se pone <strong>delante de la base de datos</strong> para reducir carga de lectura y acelerar respuestas.</p>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p><strong>Redis</strong> cuando pidan persistencia, alta disponibilidad (Multi-AZ/failover), réplicas o estructuras de datos ricas. <strong>Memcached</strong> para una caché simple, volátil y multinúcleo.</p></div></div>
+        <h3>Seguridad de Redis</h3>
+        <p>Redis admite <strong>cifrado en reposo y en tránsito (TLS)</strong> y autenticación mediante <strong>Redis AUTH</strong> (token/contraseña) o <strong>RBAC</strong> (usuarios con permisos). Memcached no ofrece estas capacidades de autenticación ni persistencia.</p>
+        <h3>Patrones de caché</h3>
+        <ul>
+          <li><strong>Lazy loading (cache-aside):</strong> la app lee de la caché; si falla (miss), lee de la BD y <strong>guarda el resultado</strong> en la caché. Solo se cachea lo que se pide, pero el primer acceso es más lento y los datos pueden quedar obsoletos (se mitiga con <strong>TTL</strong>).</li>
+          <li><strong>Write-through:</strong> cada <strong>escritura</strong> actualiza la BD <strong>y</strong> la caché a la vez. La caché siempre está fresca, pero también cachea datos que quizá no se lean.</li>
+          <li><strong>Almacenamiento de sesión:</strong> guardar el estado de sesión de usuario en ElastiCache hace que la app web sea <strong>sin estado</strong> (cualquier instancia atiende cualquier petición tras un ALB).</li>
+        </ul>
         <h3>Redshift</h3>
         <p>Almacén de datos (OLAP) con <strong>almacenamiento columnar</strong> y procesamiento masivamente paralelo (MPP), a escala de petabytes. <strong>Redshift Spectrum</strong> consulta datos directamente en S3.</p>
         <h3>Migración</h3>
@@ -1145,10 +1551,20 @@ window.TEORIA = [
   id: "06-redes",
   numero: 6,
   titulo: "Redes y entrega de contenido",
-  resumen: "VPC, subredes, grupos de seguridad y NACL, conectividad híbrida, Route 53, CloudFront y Global Accelerator.",
+  resumen: "VPC, subredes, grupos de seguridad y NACL (puertos efímeros), conectividad híbrida (VPC Peering, VPN Site-to-Site y CloudHub, Direct Connect, Transit Gateway), VPC endpoints, Route 53, CloudFront y Global Accelerator.",
   peso: "~20–25%",
   tiempo: "75–90 min",
   teoria: [
+    {
+      id: "panorama",
+      titulo: "Panorama de red",
+      html: `
+        <p>Este módulo cubre la red privada en AWS (<strong>VPC</strong>), su seguridad (grupos de seguridad y NACL), la <strong>conectividad</strong> entre VPC y con on-premises (Peering, VPN, Direct Connect, Transit Gateway) y la <strong>entrega de contenido</strong> (Route 53, CloudFront, Global Accelerator). El siguiente diagrama sitúa las piezas principales.</p>
+        <figure class="figure">
+          <img src="img/global.png" alt="Visión global de una VPC: región, subredes pública y privada, IGW, NAT Gateway, NACL, VPC Endpoint, Flow Logs, Transit Gateway, VPC Peering, VPN y Direct Connect hacia un centro de datos." loading="lazy">
+          <figcaption>Visión global: la VPC, su salida a internet, los endpoints y las vías de conexión híbrida (VPN, Direct Connect, Transit Gateway, Peering).</figcaption>
+        </figure>`
+    },
     {
       id: "vpc",
       titulo: "Componentes de una VPC",
@@ -1175,7 +1591,14 @@ window.TEORIA = [
             <tr><td>Por defecto</td><td>Deniega entrada, permite salida</td><td>Permite todo</td></tr>
           </tbody>
         </table></div>
-        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Los <strong>grupos de seguridad solo permiten</strong>, no pueden denegar. Para <strong>bloquear una IP concreta</strong> usa una <strong>NACL</strong> (admite reglas deny) o AWS WAF. La NACL es <em>sin estado</em>: hay que abrir tráfico de entrada y de salida.</p></div></div>`
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Los <strong>grupos de seguridad solo permiten</strong>, no pueden denegar. Para <strong>bloquear una IP concreta</strong> usa una <strong>NACL</strong> (admite reglas deny) o AWS WAF. La NACL es <em>sin estado</em>: hay que abrir tráfico de entrada y de salida.</p></div></div>
+        <h3>Puertos efímeros (importan por ser sin estado)</h3>
+        <p>Como la NACL es <strong>sin estado</strong>, el tráfico de vuelta no se permite solo: usa <strong>puertos efímeros</strong>. Cuando un cliente abre una conexión (p. ej. a un servidor web en el 443), la respuesta del servidor <strong>no</strong> vuelve al 443, sino a un <strong>puerto efímero aleatorio</strong> del cliente.</p>
+        <ul>
+          <li>Por eso, en la NACL hay que <strong>abrir también el rango de puertos efímeros</strong> en el sentido del tráfico de retorno (salida en el lado servidor, entrada en el lado cliente).</li>
+          <li>Rango recomendado por AWS: <code>1024–65535</code> (varía según el sistema: Linux 32768–60999, Windows 49152–65535; NAT Gateway y ELB usan 1024–65535).</li>
+        </ul>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>El grupo de seguridad, al ser <strong>con estado</strong>, gestiona el retorno automáticamente: <strong>no</strong> hace falta abrir puertos efímeros en él.</p></div></div>`
     },
     {
       id: "cidr",
@@ -1199,29 +1622,125 @@ window.TEORIA = [
             <tr><td><strong>PrivateLink</strong></td><td>Exponer/consumir un servicio de forma privada entre VPC o cuentas</td></tr>
           </tbody>
         </table></div>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Con VPC Peering en la <strong>misma región</strong> puedes <strong>referenciar grupos de seguridad</strong> de la VPC vecina en tus reglas (en lugar de rangos CIDR): un SG de la VPC A puede permitir tráfico desde un SG de la VPC B emparejada.</p></div></div>
         <h3>VPC Endpoints</h3>
         <ul>
-          <li><strong>Gateway Endpoint:</strong> solo S3 y DynamoDB, se añade a la tabla de rutas. <strong>Gratuito.</strong></li>
-          <li><strong>Interface Endpoint (PrivateLink):</strong> una ENI en la subred, para casi todos los demás servicios. Con coste por hora + datos.</li>
-        </ul>`
+          <li><strong>Gateway Endpoint:</strong> solo <strong>S3 y DynamoDB</strong>, se añade a la tabla de rutas. <strong>Gratuito.</strong> Solo accesible <em>desde dentro de la VPC</em>.</li>
+          <li><strong>Interface Endpoint (PrivateLink):</strong> una <strong>ENI</strong> con IP privada en la subred, para casi todos los demás servicios. Con coste por hora + datos.</li>
+        </ul>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>El <strong>Gateway Endpoint no es accesible desde on-premises</strong> (VPN/Direct Connect) ni desde una VPC emparejada. Para llegar a S3/DynamoDB (u otro servicio) <strong>desde on-premises o entre VPC</strong>, usa un <strong>Interface Endpoint (PrivateLink)</strong>, que sí es alcanzable por VPN, Direct Connect y Peering.</p></div></div>`
     },
     {
-      id: "dns-cdn",
-      titulo: "Route 53, CloudFront y Global Accelerator",
+      id: "vpn-s2s",
+      titulo: "VPN Site-to-Site y AWS VPN CloudHub",
       html: `
-        <h3>Políticas de enrutado de Route 53</h3>
+        <p>La <strong>Site-to-Site VPN</strong> conecta tu red on-premises con la VPC mediante un túnel <strong>IPsec cifrado</strong> que viaja por internet. Es rápida de montar y de bajo coste (frente a Direct Connect).</p>
+        <ul>
+          <li>Dos extremos: el <strong>Virtual Private Gateway (VGW)</strong> del lado AWS (o un Transit Gateway) y el <strong>Customer Gateway (CGW)</strong>, que representa tu router/firewall on-premises.</li>
+          <li>Cada conexión VPN trae <strong>2 túneles</strong> en distintas AZ para alta disponibilidad (~1,25 Gbps por túnel).</li>
+          <li>Enrutado <strong>estático</strong> o <strong>dinámico (BGP)</strong>.</li>
+        </ul>
+        <h3>AWS VPN CloudHub</h3>
+        <p>Permite comunicar <strong>varias sedes entre sí</strong> (hub-and-spoke) usando un <strong>único Virtual Private Gateway</strong>: cada sede monta su VPN contra el VGW y, mediante BGP, las sedes se hablan <strong>entre ellas</strong> a través del hub. Solución sencilla y económica para conectar oficinas remotas, incluso sin VPC de por medio.</p>
+        <figure class="figure">
+          <img src="img/cloudHub.png" alt="AWS VPN CloudHub: un Virtual Private Gateway central conectado por VPN a tres redes de clientes (Customer Gateways) en topología radial hub-and-spoke." loading="lazy">
+          <figcaption>VPN CloudHub: un mismo VGW conecta varias sedes (Customer Gateways) y les permite comunicarse entre sí a través del hub.</figcaption>
+        </figure>`
+    },
+    {
+      id: "direct-connect",
+      titulo: "AWS Direct Connect",
+      html: `
+        <p><strong>Direct Connect (DX)</strong> es un enlace <strong>físico dedicado</strong> entre tu centro de datos y AWS a través de una ubicación DX. Ofrece <strong>ancho de banda alto y latencia consistente</strong> (no depende de internet), ideal para cargas sensibles al rendimiento o grandes transferencias.</p>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>Direct Connect <strong>no cifra</strong> el tráfico por sí solo. Para cifrarlo, monta una <strong>VPN IPsec sobre DX</strong>. Además, aprovisionarlo tarda <strong>semanas</strong> (frente a la VPN, inmediata).</p></div></div>
+        <h3>Tipos de conexión</h3>
+        <ul>
+          <li><strong>Dedicada:</strong> un puerto Ethernet físico dedicado a un solo cliente, de <strong>1, 10, 100 (o 400) Gbps</strong>. Se solicita directamente a AWS.</li>
+          <li><strong>Alojada (hosted):</strong> la provee un <strong>Partner de Direct Connect</strong>, con capacidades más granulares (desde <strong>50 Mbps hasta 25 Gbps</strong>). Se contrata a través del partner.</li>
+        </ul>
+        <h3>Interfaces virtuales (VIF)</h3>
+        <ul>
+          <li><strong>Privada:</strong> acceso a los recursos privados de la VPC (por su IP privada).</li>
+          <li><strong>Pública:</strong> acceso a servicios públicos de AWS (p. ej. S3) por la conexión DX.</li>
+          <li><strong>De tránsito:</strong> conecta la DX a un <strong>Transit Gateway</strong> (vía Direct Connect Gateway).</li>
+        </ul>
+        <figure class="figure">
+          <img src="img/DirectConnect.png" alt="Direct Connect: la VPC con su Virtual Private Gateway se conecta a la ubicación de Direct Connect; una interfaz virtual privada (VLAN 1) llega a la VPC y una pública (VLAN 2) a S3/Glacier, hasta el router del cliente." loading="lazy">
+          <figcaption>Direct Connect con interfaz virtual privada (a la VPC) y pública (a servicios como S3), sobre VLAN independientes desde la red del cliente.</figcaption>
+        </figure>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Máxima resiliencia: combina <strong>Direct Connect + una VPN de respaldo</strong> (failover) para no depender de un único enlace.</p></div></div>`
+    },
+    {
+      id: "transit-gateway",
+      titulo: "Transit Gateway: ECMP, Direct Connect y Traffic Mirroring",
+      html: `
+        <p>El <strong>Transit Gateway (TGW)</strong> es un <strong>hub central</strong> que conecta <strong>muchas VPC</strong>, VPN y Direct Connect de forma escalable (evita la maraña de peerings). Se puede <strong>compartir entre cuentas</strong> con <strong>AWS Resource Access Manager (RAM)</strong>.</p>
+        <h3>VPN Site-to-Site con ECMP</h3>
+        <p>Al terminar las VPN en el TGW puedes usar <strong>ECMP</strong> (Equal-Cost Multi-Path) para <strong>agregar el ancho de banda de varios túneles/conexiones VPN</strong> y superar el límite de una sola conexión. Requiere <strong>enrutado dinámico (BGP)</strong>; no funciona con rutas estáticas.</p>
+        <figure class="figure">
+          <img src="img/ECMP.png" alt="Transit Gateway conectado a cuatro VPC y a un centro de datos corporativo mediante dos conexiones VPN, agregando ancho de banda con ECMP." loading="lazy">
+          <figcaption>Con ECMP, el Transit Gateway reparte el tráfico entre varios túneles VPN hacia on-premises y suma su ancho de banda.</figcaption>
+        </figure>
+        <h3>Compartir Direct Connect con el Transit Gateway</h3>
+        <p>Mediante un <strong>Direct Connect Gateway</strong> y una <strong>interfaz virtual de tránsito</strong>, una única Direct Connect puede alcanzar el TGW y, a través de él, <strong>todas las VPC conectadas</strong> (incluso en varias cuentas). Así centralizas la conectividad híbrida.</p>
+        <figure class="figure">
+          <img src="img/TransitGWDirectConnectComparticion.png" alt="Transit Gateway conectado a VPC de dos cuentas y, vía Direct Connect Gateway e interfaz virtual de tránsito, a la ubicación de Direct Connect y al centro de datos del cliente." loading="lazy">
+          <figcaption>Direct Connect Gateway + VIF de tránsito conectan el centro de datos al Transit Gateway y, con él, a las VPC de varias cuentas.</figcaption>
+        </figure>
+        <h3>Traffic Mirroring</h3>
+        <p><strong>Traffic Mirroring</strong> copia el tráfico de red de una <strong>ENI</strong> y lo envía a herramientas de monitorización/seguridad (IDS/IPS, análisis de paquetes) para inspección profunda, sin afectar a la carga. Útil para detección de amenazas y diagnóstico de red.</p>`
+    },
+    {
+      id: "route-53",
+      titulo: "Route 53: DNS, registros y health checks",
+      html: `
+        <p><strong>Amazon Route 53</strong> es el servicio <strong>DNS</strong> gestionado de AWS (el "53" es el puerto de DNS): traduce nombres de dominio a direcciones IP. Es <strong>altamente disponible y escalable</strong>, y además actúa como <strong>registrador de dominios</strong> y como <strong>comprobador de salud (health checks)</strong> con conmutación por error.</p>
+        <h3>Zonas alojadas (hosted zones)</h3>
+        <p>Una <strong>zona alojada</strong> es el contenedor de los registros DNS de un dominio:</p>
+        <ul>
+          <li><strong>Pública:</strong> resuelve el dominio en <strong>internet</strong>.</li>
+          <li><strong>Privada:</strong> resuelve nombres <strong>solo dentro de una o varias VPC</strong> (DNS interno). La VPC necesita <code>enableDnsSupport</code> y <code>enableDnsHostnames</code> activados.</li>
+        </ul>
+        <h3>Registros DNS</h3>
+        <p>Tipos habituales: <strong>A</strong> (nombre → IPv4), <strong>AAAA</strong> (IPv6), <strong>CNAME</strong> (nombre → otro nombre), <strong>MX</strong> (correo), <strong>TXT</strong> (verificación/SPF), <strong>NS</strong> y <strong>SOA</strong> (delegación de la zona). Cada registro tiene un <strong>TTL</strong> (tiempo de caché en segundos).</p>
+        <h3>CNAME vs Alias — muy preguntado</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th></th><th>CNAME</th><th>Alias (propio de Route 53)</th></tr></thead>
+          <tbody>
+            <tr><td>Apunta a</td><td>Cualquier nombre DNS</td><td>Recursos AWS (ELB, CloudFront, S3 web, API Gateway, Global Accelerator) u otro registro de la zona</td></tr>
+            <tr><td>Apex del dominio (<code>ejemplo.com</code>)</td><td><strong>No</strong> (solo subdominios)</td><td><strong>Sí</strong></td></tr>
+            <tr><td>Coste de consulta</td><td>Se cobra</td><td><strong>Gratis</strong> hacia recursos AWS</td></tr>
+            <tr><td>Tipo de registro</td><td>CNAME</td><td>A / AAAA</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Para apuntar el <strong>dominio raíz (apex)</strong> a un ELB, CloudFront o S3 usa un <strong>registro Alias</strong>: el CNAME no puede ir en el apex. Además el Alias sigue solo los cambios de IP del recurso y no cobra por consulta.</p></div></div>
+        <h3>Políticas de enrutado</h3>
         <div class="tablewrap"><table>
           <thead><tr><th>Política</th><th>Uso</th></tr></thead>
           <tbody>
             <tr><td>Simple</td><td>Un único recurso</td></tr>
-            <tr><td>Weighted (ponderada)</td><td>Pruebas A/B, migración gradual (% a cada recurso)</td></tr>
-            <tr><td>Latency (latencia)</td><td>Enruta a la región de menor latencia</td></tr>
+            <tr><td>Ponderada (Weighted)</td><td>Pruebas A/B, migración gradual (% a cada recurso)</td></tr>
+            <tr><td>Latencia</td><td>Enruta a la región de menor latencia</td></tr>
             <tr><td>Failover</td><td>Activo-pasivo para DR (según health check)</td></tr>
-            <tr><td>Geolocation</td><td>Según la ubicación del usuario</td></tr>
+            <tr><td>Geolocalización</td><td>Según la ubicación del usuario</td></tr>
+            <tr><td>Geoproximidad</td><td>Según la distancia geográfica, con sesgo (bias) ajustable</td></tr>
             <tr><td>Multivalor</td><td>Varias IP con comprobación de salud</td></tr>
           </tbody>
         </table></div>
-        <h3>CloudFront vs Global Accelerator</h3>
+        <h3>Health checks y conmutación por error</h3>
+        <p>Route 53 comprueba la salud de los recursos y, con la política <strong>Failover</strong>, deja de enviar tráfico a los que estén caídos. Tres tipos:</p>
+        <ul>
+          <li><strong>De endpoint:</strong> sondea una IP o dominio por HTTP, HTTPS o TCP.</li>
+          <li><strong>Calculado:</strong> combina el estado de varios health checks hijos.</li>
+          <li><strong>Basado en alarma de CloudWatch:</strong> sigue el estado de una alarma.</li>
+        </ul>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>Los verificadores de Route 53 son <strong>públicos</strong>: <strong>no pueden alcanzar recursos en subredes privadas</strong> (IP privada). Para vigilar un recurso privado usa un <strong>health check basado en una alarma de CloudWatch</strong>: creas una métrica/alarma (p. ej. <code>StatusCheckFailed</code> de la instancia, o una métrica personalizada que publique una Lambda) y el health check sigue el estado de esa alarma.</p></div></div>
+        <p>Los health checks se integran con <strong>CloudWatch</strong> y pueden disparar <strong>alertas por SNS</strong> cuando un recurso pasa a no disponible.</p>`
+    },
+    {
+      id: "cloudfront-ga",
+      titulo: "CloudFront y Global Accelerator",
+      html: `
         <div class="tablewrap"><table>
           <thead><tr><th></th><th>CloudFront</th><th>Global Accelerator</th></tr></thead>
           <tbody>
@@ -1231,7 +1750,19 @@ window.TEORIA = [
             <tr><td>IP</td><td>Cambian</td><td><strong>IP estáticas (Anycast)</strong></td></tr>
           </tbody>
         </table></div>
-        <p>Para proteger un origen S3 tras CloudFront usa <strong>OAC/OAI</strong>; para restringir contenido, <strong>Signed URLs/Cookies</strong> y <strong>geo-restricción</strong>.</p>`
+        <h3>Amazon CloudFront</h3>
+        <p>Es la <strong>CDN</strong> de AWS: cachea el contenido en <strong>ubicaciones de borde (edge locations)</strong> cercanas al usuario, reduciendo latencia y descargando el origen. Sirve contenido <strong>estático</strong> y <strong>dinámico</strong>, y puede ejecutar lógica en el borde con <strong>CloudFront Functions</strong> o <strong>Lambda@Edge</strong>.</p>
+        <p>Orígenes con los que se integra:</p>
+        <ul>
+          <li><strong>Bucket S3</strong> (o S3 como web estática), protegido con <strong>OAC/OAI</strong> para que solo CloudFront acceda al bucket.</li>
+          <li><strong>ALB, EC2 o cualquier servidor HTTP</strong> (origen personalizado), on-premises incluido.</li>
+          <li><strong>API Gateway</strong>, <strong>Lambda function URLs</strong> y servicios de medios (MediaStore/MediaPackage).</li>
+        </ul>
+        <p>Para restringir contenido: <strong>Signed URLs/Cookies</strong>, <strong>geo-restricción</strong> e integración con <strong>AWS WAF</strong>.</p>
+        <h3>AWS Global Accelerator</h3>
+        <p>Proporciona <strong>2 IP estáticas Anycast</strong> y enruta al usuario por la <strong>red troncal de AWS</strong> hasta el <strong>endpoint sano más cercano</strong>, mejorando latencia, disponibilidad y failover entre regiones. <strong>No cachea</strong> (a diferencia de CloudFront) y sirve <strong>cualquier protocolo TCP/UDP</strong>, por lo que encaja con apps no HTTP (juegos, VoIP, IoT).</p>
+        <p>Endpoints que puede tener detrás: <strong>ALB, NLB, instancias EC2</strong> y <strong>Elastic IP</strong>, en una o varias regiones.</p>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>"Cachear contenido web / CDN" → <strong>CloudFront</strong>. "IP estática, TCP/UDP no HTTP, failover entre regiones y baja latencia por la red de AWS" → <strong>Global Accelerator</strong>.</p></div></div>`
     }
   ],
   preguntas: [
@@ -1353,6 +1884,116 @@ window.TEORIA = [
       opciones: ["Ponderada (Weighted)", "Geolocalización", "Latencia", "Failover"],
       correctas: [0],
       explicacion: "La política ponderada reparte el tráfico según pesos porcentuales entre recursos, ideal para pruebas A/B y despliegues graduales."
+    },
+    {
+      pregunta: "Una NACL permite la entrada al puerto 443, pero los clientes no reciben la respuesta del servidor web. ¿Qué falta configurar?",
+      opciones: [
+        "Permitir la salida en el rango de puertos efímeros (1024–65535)",
+        "Cambiar la NACL a modo con estado",
+        "Abrir también el puerto 443 de salida",
+        "Añadir un grupo de seguridad con regla deny"
+      ],
+      correctas: [0],
+      explicacion: "La NACL es sin estado: el tráfico de respuesta vuelve por un puerto efímero, no por el 443. Hay que permitir explícitamente la salida en el rango de puertos efímeros (AWS recomienda 1024–65535). El grupo de seguridad, con estado, no necesita esto."
+    },
+    {
+      pregunta: "Dos VPC en la misma región están emparejadas (peering). Se quiere permitir tráfico desde las instancias de la VPC B a las de la VPC A sin usar rangos CIDR. ¿Qué permite AWS?",
+      opciones: [
+        "Referenciar el grupo de seguridad de la VPC B en las reglas del SG de la VPC A",
+        "Compartir la misma NACL entre ambas VPC",
+        "Nada: solo se puede por CIDR",
+        "Usar un Internet Gateway compartido"
+      ],
+      correctas: [0],
+      explicacion: "En VPC peering dentro de la misma región puedes referenciar grupos de seguridad de la VPC vecina en tus reglas, en lugar de especificar rangos CIDR."
+    },
+    {
+      pregunta: "Desde el centro de datos on-premises (conectado por Direct Connect) se necesita acceso privado a Amazon S3. ¿Qué tipo de VPC endpoint usar?",
+      opciones: [
+        "Gateway Endpoint",
+        "Interface Endpoint (PrivateLink)",
+        "Internet Gateway",
+        "NAT Gateway"
+      ],
+      correctas: [1],
+      explicacion: "El Gateway Endpoint solo es accesible desde dentro de la VPC (vía tabla de rutas), no desde on-premises ni VPC emparejadas. Para acceder desde on-premises (VPN/Direct Connect) se usa un Interface Endpoint (PrivateLink)."
+    },
+    {
+      pregunta: "Una empresa quiere conectar varias oficinas remotas entre sí de forma sencilla y económica usando VPN, comunicándose todas a través de AWS. ¿Qué solución encaja?",
+      opciones: [
+        "AWS VPN CloudHub",
+        "VPC Peering entre las oficinas",
+        "Un Internet Gateway por oficina",
+        "Amazon CloudFront"
+      ],
+      correctas: [0],
+      explicacion: "VPN CloudHub usa un único Virtual Private Gateway como hub: cada sede monta su Site-to-Site VPN y, mediante BGP, las sedes se comunican entre sí (hub-and-spoke) de forma sencilla y de bajo coste."
+    },
+    {
+      pregunta: "Se ha contratado Direct Connect, pero seguridad exige que el tráfico vaya cifrado extremo a extremo. ¿Qué añadir?",
+      opciones: [
+        "Nada: Direct Connect ya cifra el tráfico",
+        "Una VPN IPsec sobre la conexión Direct Connect",
+        "Una NACL",
+        "Un Gateway Endpoint"
+      ],
+      correctas: [1],
+      explicacion: "Direct Connect no cifra el tráfico por sí mismo. Para cifrarlo se monta una VPN IPsec sobre la Direct Connect (VPN over DX)."
+    },
+    {
+      pregunta: "¿Qué diferencia a una conexión Direct Connect 'dedicada' de una 'alojada' (hosted)?",
+      opciones: [
+        "La dedicada es un puerto físico para un solo cliente (1/10/100 Gbps) contratado a AWS; la alojada la provee un Partner con capacidades más granulares (50 Mbps–25 Gbps)",
+        "La alojada siempre es más rápida",
+        "La dedicada va cifrada y la alojada no",
+        "No hay ninguna diferencia real"
+      ],
+      correctas: [0],
+      explicacion: "La conexión dedicada es un puerto Ethernet físico dedicado a un único cliente (1, 10, 100 o 400 Gbps), solicitado a AWS. La alojada la entrega un AWS Direct Connect Partner con capacidades más granulares (de 50 Mbps a 25 Gbps)."
+    },
+    {
+      pregunta: "Se necesita más ancho de banda hacia on-premises del que da una sola conexión VPN, terminando las VPN en un Transit Gateway. ¿Qué permite agregar el ancho de banda de varios túneles?",
+      opciones: [
+        "ECMP (Equal-Cost Multi-Path) con enrutado dinámico BGP",
+        "Rutas estáticas en la VPN",
+        "Un Gateway Endpoint",
+        "VPC Peering"
+      ],
+      correctas: [0],
+      explicacion: "Al terminar las VPN en el Transit Gateway, ECMP agrega el ancho de banda de varios túneles/conexiones VPN. Requiere enrutado dinámico (BGP); no funciona con rutas estáticas."
+    },
+    {
+      pregunta: "Hay que apuntar el dominio raíz (apex) ejemplo.com a un Application Load Balancer. ¿Qué tipo de registro de Route 53 usar?",
+      opciones: [
+        "Un registro CNAME",
+        "Un registro Alias de tipo A",
+        "Un registro MX",
+        "Un registro TXT"
+      ],
+      correctas: [1],
+      explicacion: "El CNAME no puede usarse en el apex del dominio. El registro Alias (tipo A) sí, apunta a recursos AWS como un ELB, sigue automáticamente sus cambios de IP y no tiene coste de consulta."
+    },
+    {
+      pregunta: "Se quiere resolver nombres DNS internos que solo deben ser accesibles dentro de la VPC. ¿Qué usar?",
+      opciones: [
+        "Una zona alojada pública de Route 53",
+        "Una zona alojada privada de Route 53 asociada a la VPC",
+        "Un registro CNAME público",
+        "Un Internet Gateway"
+      ],
+      correctas: [1],
+      explicacion: "La zona alojada privada resuelve nombres solo dentro de una o varias VPC (DNS interno). Requiere que la VPC tenga enableDnsSupport y enableDnsHostnames activados."
+    },
+    {
+      pregunta: "Se necesita comprobar la salud de una instancia EC2 que solo tiene IP privada (subred privada) y avisar cuando falle. ¿Cómo hacerlo con Route 53?",
+      opciones: [
+        "Un health check de endpoint apuntando a su IP privada",
+        "Un health check basado en una alarma de CloudWatch (que sigue una métrica del recurso) y notificar por SNS",
+        "No es posible comprobar recursos privados",
+        "Un registro Alias con TTL bajo"
+      ],
+      correctas: [1],
+      explicacion: "Los verificadores de Route 53 son públicos y no alcanzan IP privadas. Se usa un health check basado en una alarma de CloudWatch (p. ej. sobre StatusCheckFailed o una métrica personalizada) y se envían alertas por SNS."
     }
   ]
 }
@@ -1556,7 +2197,7 @@ window.TEORIA = [
   id: "08-integracion",
   numero: 8,
   titulo: "Integración de aplicaciones",
-  resumen: "Desacoplar con SQS y SNS, streaming con Kinesis, orquestación con Step Functions, EventBridge y API Gateway.",
+  resumen: "Desacoplar con SQS y SNS (FIFO, orden, cifrado y control de acceso), streaming con Kinesis (aprovisionamiento, orden y seguridad), orquestación con Step Functions, EventBridge y API Gateway.",
   peso: "~10–15%",
   tiempo: "45–60 min",
   teoria: [
@@ -1579,21 +2220,29 @@ window.TEORIA = [
       id: "sqs",
       titulo: "Amazon SQS",
       html: `
-        <p>Cola de mensajes para <strong>desacoplar</strong> componentes. Tamaño máx. de mensaje: 256 KB.</p>
+        <p>Cola de mensajes para <strong>desacoplar</strong> componentes. Tamaño máx. de mensaje: 256 KB (mensajes mayores, hasta 2 GB, con la <strong>Extended Client Library</strong> + S3).</p>
         <div class="tablewrap"><table>
           <thead><tr><th></th><th>Standard</th><th>FIFO</th></tr></thead>
           <tbody>
             <tr><td>Orden</td><td>Best-effort (no garantizado)</td><td><strong>Garantizado</strong></td></tr>
-            <tr><td>Duplicados</td><td>Posibles</td><td>Exactamente una vez</td></tr>
+            <tr><td>Duplicados</td><td>Posibles (al menos una vez)</td><td>Exactamente una vez (deduplicación)</td></tr>
             <tr><td>Rendimiento</td><td>Ilimitado</td><td>300 msg/s (3.000 en lote)</td></tr>
           </tbody>
         </table></div>
+        <p><strong>Casos de uso:</strong> amortiguar picos entre una capa web y sus workers, desacoplar microservicios, distribuir trabajo entre un Auto Scaling group de consumidores, o servir de buffer ante una base de datos o un proceso lento.</p>
         <h3>Conceptos clave</h3>
         <ul>
           <li><strong>Visibility timeout:</strong> tiempo que un mensaje queda invisible tras leerlo (por defecto 30 s, máx. 12 h). Evita procesamiento duplicado.</li>
           <li><strong>Retención:</strong> por defecto 4 días, máx. 14 días.</li>
           <li><strong>Long polling</strong> (0–20 s): espera a que haya mensajes; reduce costes y respuestas vacías (recomendado frente al short polling).</li>
           <li><strong>Dead Letter Queue (DLQ):</strong> recoge los mensajes que fallan tras varios intentos.</li>
+        </ul>
+        <h3>Orden con FIFO</h3>
+        <p>La cola FIFO garantiza el orden dentro de un <strong>Message Group ID</strong>: los mensajes del mismo grupo se procesan en orden y distintos grupos se procesan en paralelo. La deduplicación usa un <strong>Deduplication ID</strong> (explícito o basado en el contenido).</p>
+        <h3>Cifrado y control de acceso</h3>
+        <ul>
+          <li><strong>Cifrado en reposo</strong> con claves gestionadas por SQS (<strong>SSE-SQS</strong>) o con <strong>KMS</strong> (SSE-KMS); en tránsito por <strong>HTTPS/TLS</strong>.</li>
+          <li><strong>Acceso:</strong> <strong>políticas de IAM</strong> (quién puede enviar/recibir) y <strong>política de cola</strong> basada en recurso (p. ej. permitir que un tema SNS o una cuenta concreta escriba en la cola).</li>
         </ul>`
     },
     {
@@ -1609,7 +2258,13 @@ window.TEORIA = [
       [SQS]    [SQS]    [SQS]
         |        |        |
      [App1]   [App2]   [App3]</code></pre>
-        <p>Un evento (p. ej. una subida a S3) publica en SNS, que reparte a varias colas SQS para procesamiento paralelo, desacoplado y sin pérdida de datos.</p>`
+        <p>Un evento (p. ej. una subida a S3) publica en SNS, que reparte a varias colas SQS para procesamiento paralelo, desacoplado y sin pérdida de datos.</p>
+        <h3>Cifrado y control de acceso</h3>
+        <ul>
+          <li><strong>Cifrado en reposo</strong> con <strong>KMS</strong> (SSE) y en tránsito por <strong>HTTPS/TLS</strong>.</li>
+          <li><strong>Acceso:</strong> <strong>políticas de IAM</strong> y <strong>política de tema</strong> basada en recurso, que define quién puede <strong>publicar</strong> y quién puede <strong>suscribirse</strong> (y con qué protocolos).</li>
+          <li>Los <strong>temas FIFO</strong> preservan el orden y, combinados con colas SQS FIFO suscritas, mantienen el orden de extremo a extremo.</li>
+        </ul>`
     },
     {
       id: "kinesis",
@@ -1624,7 +2279,17 @@ window.TEORIA = [
             <tr><td><strong>Video Streams</strong></td><td>Streaming de vídeo (cámaras, etc.)</td></tr>
           </tbody>
         </table></div>
-        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>"Procesar millones de registros en tiempo real" → <strong>Data Streams</strong>. "Cargar el stream a S3/Redshift con mínima gestión" → <strong>Firehose</strong>.</p></div></div>`
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>"Procesar millones de registros en tiempo real" → <strong>Data Streams</strong>. "Cargar el stream a S3/Redshift con mínima gestión" → <strong>Firehose</strong>.</p></div></div>
+        <h3>Aprovisionamiento de Data Streams</h3>
+        <ul>
+          <li><strong>Provisioned:</strong> tú defines y gestionas el número de <strong>shards</strong> (cada shard = 1 MB/s o 1.000 registros/s de entrada). Más barato si conoces la carga.</li>
+          <li><strong>On-Demand:</strong> Kinesis escala los shards automáticamente según el tráfico; ideal para cargas impredecibles.</li>
+        </ul>
+        <h3>Orden en Kinesis</h3>
+        <p>Los registros se reparten en shards según su <strong>partition key</strong>. Todos los registros con la <strong>misma partition key</strong> van al mismo shard y se procesan <strong>en orden</strong> (p. ej. usar el <em>ID de pago</em> como partition key ordena los eventos de ese pago). Retención configurable de 1 a 365 días.</p>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Para <strong>ordenar</strong>: en <strong>Kinesis</strong> usa la <strong>partition key</strong>; en <strong>SQS</strong> usa una cola <strong>FIFO</strong> con <strong>Message Group ID</strong>.</p></div></div>
+        <h3>Seguridad</h3>
+        <p><strong>Cifrado en reposo</strong> con <strong>KMS</strong> y en tránsito por <strong>HTTPS/TLS</strong>; el acceso se controla con <strong>IAM</strong>.</p>`
     },
     {
       id: "api-orquestacion",

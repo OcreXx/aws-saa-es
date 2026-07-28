@@ -54,5 +54,27 @@
   <script src="js/data-teoria.js"></script>
   <script src="js/data-examenes.js"></script>
   <script src="js/app.js"></script>
+
+  <!-- Mermaid: mapas conceptuales de la teoría (carga diferida desde CDN) -->
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: "base",
+      themeVariables: {
+        fontFamily: "Figtree, Segoe UI, system-ui, sans-serif",
+        fontSize: "14px",
+        primaryColor: "#FCEBDD",
+        primaryBorderColor: "#E2620E",
+        primaryTextColor: "#2B2723",
+        lineColor: "#D08B4F",
+        clusterBkg: "#FFFFFF",
+        clusterBorder: "#E7E3DE"
+      }
+    });
+    window.mermaid = mermaid;
+    // Por si el módulo se pintó antes de que Mermaid terminara de cargar.
+    if (typeof window.__runMermaid === "function") window.__runMermaid();
+  </script>
 </body>
 </html>
