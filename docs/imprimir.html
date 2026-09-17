@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AWS SAA · Teoría completa (versión imprimible)</title>
+  <meta name="description" content="Versión imprimible / PDF de la teoría del curso AWS Solutions Architect Associate (SAA-C03) en español. Solo teoría, sin preguntas." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="css/styles.css" />
+
+  <style>
+    /* =========================================================
+       Vista imprimible: solo teoría, pensada para exportar a PDF
+       ========================================================= */
+    body { background: #fff; }
+    .glow { display: none; }
+
+    /* ---------- Barra de acciones (no se imprime) ---------- */
+    .toolbar {
+      position: sticky; top: 0; z-index: 50;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+      padding: 14px 22px; background: var(--paper);
+      border-bottom: 1px solid var(--line);
+    }
+    .toolbar__title { font-family: var(--font-display); font-weight: 700; color: var(--ink); margin-right: auto; }
+    .toolbar__title small { display: block; font-family: var(--font-body); font-weight: 400; color: var(--muted); font-size: .82rem; }
+    .toolbar select {
+      font: inherit; font-size: .9rem; color: var(--ink); background: #fff;
+      border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding: 9px 12px;
+    }
+    .toolbar .btn { cursor: pointer; border: 0; }
+
+    /* ---------- Lienzo del documento ---------- */
+    .sheet { max-width: 900px; margin: 0 auto; padding: 40px 28px 80px; }
+
+    /* ---------- Portada ---------- */
+    .cover { text-align: center; padding: 60px 0 40px; }
+    .cover__logo { color: var(--orange-logo); display: block; margin: 0 auto; }
+    .cover__kicker {
+      display: inline-block; margin: 18px 0 10px; padding: 6px 14px;
+      background: var(--peach); color: var(--orange-deep); border-radius: 999px;
+      font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    }
+    .cover h1 { font-size: 3rem; line-height: 1.1; margin: 6px 0 14px; }
+    .cover__sub { font-size: 1.15rem; color: var(--ink-soft); margin: 0 0 6px; }
+    .cover__meta { color: var(--muted); font-size: .92rem; margin: 26px 0 0; }
+    .cover__rule { width: 64px; height: 4px; background: var(--orange); border-radius: 4px; margin: 26px auto 0; }
+
+    /* ---------- Índice ---------- */
+    .toc { margin-top: 48px; }
+    .toc h2 { font-size: 1.6rem; margin: 0 0 20px; }
+    .toc__mod { border-top: 1px solid var(--line); padding: 14px 0; }
+    .toc__mod:last-child { border-bottom: 1px solid var(--line); }
+    .toc__head { display: flex; align-items: baseline; gap: 12px; }
+    .toc__n {
+      font-family: var(--font-mono); font-size: .8rem; font-weight: 600;
+      background: var(--peach); color: var(--orange-deep);
+      border-radius: 6px; padding: 3px 8px;
+    }
+    .toc__t { font-family: var(--font-display); font-weight: 700; color: var(--ink); font-size: 1.05rem; }
+    .toc__meta { margin-left: auto; color: var(--muted); font-size: .84rem; white-space: nowrap; }
+    .toc__secs { margin: 8px 0 0 52px; color: var(--ink-soft); font-size: .9rem; line-height: 1.7; }
+
+    /* ---------- Cabecera de módulo ---------- */
+    .mod { margin-top: 56px; }
+    .mod__head { border-bottom: 2px solid var(--orange); padding-bottom: 18px; margin-bottom: 30px; }
+    .mod__eyebrow {
+      font-family: var(--font-mono); font-size: .8rem; font-weight: 600; letter-spacing: .06em;
+      color: var(--orange-deep); text-transform: uppercase;
+    }
+    .mod__head h1 { font-size: 2.1rem; margin: 8px 0 10px; }
+    .mod__head p { color: var(--ink-soft); margin: 0 0 12px; }
+    .mod__facts { display: flex; gap: 22px; flex-wrap: wrap; color: var(--muted); font-size: .86rem; }
+
+    /* Numeración de sección igual que en la web */
+    .prose h2 .n {
+      font-family: var(--font-mono); font-size: .78rem; font-weight: 600;
+      background: var(--peach); color: var(--orange-deep);
+      border-radius: 6px; padding: 4px 8px; flex-shrink: 0;
+    }
+    .prose h2 { align-items: baseline; }
+
+    .endnote { margin-top: 60px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: .86rem; text-align: center; }
+
+    /* =========================================================
+       Reglas de impresión / PDF
+       ========================================================= */
+    @page { size: A4; margin: 15mm 14mm 16mm; }
+
+    @media print {
+      .toolbar { display: none !important; }
+      .sheet { max-width: none; margin: 0; padding: 0; }
+      body { font-size: 10.5pt; }
+
+      /* Conserva los colores de callouts, tablas y badges */
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+      .cover { padding: 30mm 0 0; break-after: page; }
+      .toc { margin-top: 0; break-after: page; }
+      .mod { margin-top: 0; break-before: page; }
+      .toc__mod { break-inside: avoid; }
+
+      /* Evita cortes feos */
+      .prose h2, .prose h3, .mod__head { break-after: avoid; }
+      .prose section { break-inside: auto; margin-bottom: 26px; }
+      .callout, .prose .figure, .prose pre, .conceptmap { break-inside: avoid; }
+      .prose table { break-inside: auto; }
+      .prose tr { break-inside: avoid; }
+      .prose thead { display: table-header-group; }
+      p, li { orphans: 3; widows: 3; }
+
+      .prose .tablewrap { overflow: visible; }
+      .prose .figure img { max-height: 150mm; width: auto; }
+      .conceptmap .mermaid svg { max-height: 215mm; }
+      a { text-decoration: none; color: inherit; }
+    }
+  </style>
+</head>
+<body>
+  <!-- ===== Acciones (solo pantalla) ===== -->
+  <div class="toolbar">
+    <div class="toolbar__title">
+      Teoría en PDF
+      <small>Solo teoría · sin preguntas de práctica</small>
+    </div>
+    <select id="selMod" aria-label="Elegir módulo"></select>
+    <button class="btn btn--primary" id="btnPrint" type="button">Descargar PDF</button>
+    <a class="btn btn--ghost" href="index.html">Volver al sitio</a>
+  </div>
+
+  <main class="sheet" id="out"></main>
+
+  <script src="js/data-teoria.js"></script>
+  <script>
+  (function () {
+    "use strict";
+
+    var MODULOS = window.TEORIA || [];
+    var params  = new URLSearchParams(location.search);
+
+    // ?m=03-computo · ?m=3 · ?m=3,4,5 · sin parámetro = todos
+    function seleccion() {
+      var q = (params.get("m") || "").trim();
+      if (!q) return MODULOS.slice();
+      var claves = q.split(",").map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+      var sel = MODULOS.filter(function (m) {
+        return claves.some(function (k) {
+          return m.id.toLowerCase() === k || String(m.numero) === k || String(m.numero).padStart(2, "0") === k;
+        });
+      });
+      return sel.length ? sel : MODULOS.slice();
+    }
+
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+      });
+    }
+    var dosCifras = function (n) { return String(n).padStart(2, "0"); };
+
+    var mods = seleccion();
+    var completo = mods.length === MODULOS.length;
+    var totalSecs = mods.reduce(function (n, m) { return n + ((m.teoria || []).length); }, 0);
+    var fecha = new Date().toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+
+    /* ---------- Portada ---------- */
+    var portada =
+      '<section class="cover">' +
+        '<svg class="cover__logo" viewBox="0 0 32 32" width="58" height="58" fill="none" aria-hidden="true">' +
+          '<path d="M4 20 L11 8 L18 20" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+          '<path d="M14 20 L21 8 L28 20" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>' +
+          '<path d="M6 24 Q16 28 26 24" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' +
+        '</svg>' +
+        '<div class="cover__kicker">AWS SAA en español</div>' +
+        '<h1>' + (completo ? "Teoría completa" : (mods.length === 1 ? esc(mods[0].titulo) : "Teoría seleccionada")) + '</h1>' +
+        '<p class="cover__sub">AWS Certified Solutions Architect – Associate (SAA-C03)</p>' +
+        '<div class="cover__rule"></div>' +
+        '<p class="cover__meta">' + mods.length + ' ' + (mods.length === 1 ? "módulo" : "módulos") + ' · ' + totalSecs + ' secciones · ' + fecha +
+        '<br>Material de estudio · sin preguntas de práctica</p>' +
+      '</section>';
+
+    /* ---------- Índice ---------- */
+    var indice =
+      '<section class="toc"><h2>Índice</h2>' +
+      mods.map(function (m) {
+        var secs = (m.teoria || []).map(function (s, i) { return dosCifras(i + 1) + ". " + esc(s.titulo); }).join(" · ");
+        return '<div class="toc__mod">' +
+            '<div class="toc__head">' +
+              '<span class="toc__n">' + dosCifras(m.numero) + '</span>' +
+              '<span class="toc__t">' + esc(m.titulo) + '</span>' +
+              '<span class="toc__meta">' + esc(m.tiempo || "") + (m.peso ? " · peso " + esc(m.peso) : "") + '</span>' +
+            '</div>' +
+            (secs ? '<div class="toc__secs">' + secs + '</div>' : '') +
+          '</div>';
+      }).join("") +
+      '</section>';
+
+    /* ---------- Módulos ---------- */
+    var cuerpo = mods.map(function (m) {
+      var secciones = (m.teoria || []).map(function (s, i) {
+        // En un documento impreso no hay scroll: las imágenes deben cargarse todas.
+        var html = String(s.html).replace(/\s+loading="lazy"/g, "");
+        return '<section id="sec-' + esc(m.id) + '-' + esc(s.id) + '">' +
+            '<h2><span class="n">' + dosCifras(i + 1) + '</span> ' + esc(s.titulo) + '</h2>' +
+            html +
+          '</section>';
+      }).join("");
+
+      var mapa = m.diagrama
+        ? '<figure class="conceptmap"><figcaption>Mapa conceptual</figcaption><pre class="mermaid">' + esc(m.diagrama) + '</pre></figure>'
+        : "";
+
+      return '<article class="mod" id="mod-' + esc(m.id) + '">' +
+          '<header class="mod__head">' +
+            '<div class="mod__eyebrow">Módulo ' + dosCifras(m.numero) + '</div>' +
+            '<h1>' + esc(m.titulo) + '</h1>' +
+            '<p>' + esc(m.resumen || "") + '</p>' +
+            '<div class="mod__facts">' +
+              '<span>Tiempo estimado: ' + esc(m.tiempo || "—") + '</span>' +
+              '<span>Peso en el examen: ' + esc(m.peso || "—") + '</span>' +
+              '<span>' + ((m.teoria || []).length) + ' secciones</span>' +
+            '</div>' +
+          '</header>' +
+          mapa +
+          '<div class="prose">' + secciones + '</div>' +
+        '</article>';
+    }).join("");
+
+    document.getElementById("out").innerHTML =
+      portada + indice + cuerpo +
+      '<p class="endnote">AWS SAA en español · contenido educativo original. No son materiales oficiales de AWS.</p>';
+
+    /* ---------- Selector de módulo ---------- */
+    var sel = document.getElementById("selMod");
+    var actual = params.get("m") || "";
+    sel.innerHTML =
+      '<option value="">Todos los módulos (' + MODULOS.length + ')</option>' +
+      MODULOS.map(function (m) {
+        return '<option value="' + esc(m.id) + '"' + (actual === m.id ? " selected" : "") + '>' +
+          dosCifras(m.numero) + ' · ' + esc(m.titulo) + '</option>';
+      }).join("");
+    sel.addEventListener("change", function () {
+      location.search = sel.value ? "?m=" + encodeURIComponent(sel.value) : "";
+    });
+    document.getElementById("btnPrint").addEventListener("click", function () { window.print(); });
+
+    document.title = completo
+      ? "AWS SAA · Teoría completa (SAA-C03)"
+      : "AWS SAA · " + mods.map(function (m) { return m.titulo; }).join(", ");
+
+    /* ---------- Señal de "listo" para el generador de PDF ---------- */
+    window.__pdfMeta = { modulos: mods.length, secciones: totalSecs, completo: completo };
+    function marcarListo() { window.__pdfReady = true; }
+
+    Promise.resolve()
+      .then(function () { return document.fonts ? document.fonts.ready : null; })
+      .then(function () {
+        var imgs = Array.prototype.slice.call(document.images);
+        return Promise.all(imgs.map(function (img) {
+          img.loading = "eager";
+          if (img.complete && img.naturalWidth) return img.decode().catch(function () {});
+          return new Promise(function (r) {
+            img.addEventListener("load", r); img.addEventListener("error", r);
+            setTimeout(r, 15000);
+          });
+        }));
+      })
+      .then(function () {
+        var pre = document.querySelector(".mermaid");
+        if (!pre) return null;
+        return new Promise(function (resolve) {
+          var t0 = Date.now();
+          (function espera() {
+            if (pre.querySelector("svg")) return resolve();
+            if (Date.now() - t0 > 12000) return resolve();   // si Mermaid no carga, seguimos igual
+            setTimeout(espera, 150);
+          })();
+        });
+      })
+      .then(marcarListo, marcarListo);
+  })();
+  </script>
+
+  <!-- Mermaid para el mapa conceptual del módulo 02 (mismo tema que la web) -->
+  <script type="module">
+    try {
+      const mermaid = (await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")).default;
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: "base",
+        themeVariables: {
+          fontFamily: "Figtree, Segoe UI, system-ui, sans-serif",
+          fontSize: "14px",
+          primaryColor: "#FCEBDD",
+          primaryBorderColor: "#E2620E",
+          primaryTextColor: "#2B2723",
+          lineColor: "#D08B4F",
+          clusterBkg: "#FFFFFF",
+          clusterBorder: "#E7E3DE"
+        }
+      });
+      const nodes = document.querySelectorAll(".mermaid:not([data-processed])");
+      if (nodes.length) await mermaid.run({ nodes });
+    } catch (e) {
+      console.warn("Mermaid no disponible, se imprime sin mapa conceptual:", e);
+    }
+  </script>
+</body>
+</html>

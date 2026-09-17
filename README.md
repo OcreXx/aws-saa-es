@@ -23,11 +23,15 @@ python -m http.server 8123
 ```
 docs/            → sitio web publicado (GitHub Pages)
   index.html     → shell de la SPA
+  imprimir.html  → vista imprimible: solo teoría, para exportar a PDF
   css/styles.css → sistema de diseño
   js/app.js          → router + render + quizzes + diagramas
   js/data-teoria.js  → contenido de teoría (13 módulos, mapas conceptuales opcionales)
   js/data-examenes.js→ exámenes de práctica (bloques de 50 preguntas; ver más abajo)
   img/               → imágenes de la teoría (diagramas de arquitectura, etc.)
+tools/
+  generar-pdf.mjs  → exporta la teoría a PDF con Chrome headless
+pdf/               → PDF generados (no versionados, ver .gitignore)
 ```
 
 ## 🗺️ Diagramas (mapas conceptuales)
@@ -63,6 +67,24 @@ Las imágenes (diagramas de arquitectura, etc.) van en **`docs/img/`** (dentro d
 ```
 
 El CSS de `.prose .figure` las enmarca y centra automáticamente. Las imágenes fuente viven en `TheroyBase/NN-*/` (no publicado), así que hay que **copiarlas a `docs/img/`**. GitHub Pages distingue mayúsculas/minúsculas: respeta el nombre exacto en el `src`.
+
+## 📕 Teoría en PDF
+
+`docs/imprimir.html` re-dibuja `data-teoria.js` como **un documento continuo con solo la teoría** (portada, índice y los 13 módulos; las `preguntas` no se renderizan). Reutiliza `css/styles.css`, así que tablas, *callouts*, figuras y el mapa conceptual de Mermaid salen con el diseño del sitio.
+
+**Desde el navegador** (también funciona ya publicado en GitHub Pages): abre `imprimir.html` — hay un enlace *PDF* en el menú — elige *Todos los módulos* o uno suelto y pulsa **Descargar PDF** → *Guardar como PDF*. Acepta `?m=06-redes` o `?m=3,4` en la URL.
+
+**Desde la terminal** (mejor resultado: numeración de páginas al pie y sin diálogos):
+
+```bash
+node tools/generar-pdf.mjs                # pdf/AWS-SAA-Teoria-Completa.pdf  (~68 págs)
+node tools/generar-pdf.mjs --por-modulo   # además, un PDF por módulo
+node tools/generar-pdf.mjs --salida docs/pdf   # publicarlo con la web
+```
+
+Sin dependencias que instalar: levanta un servidor estático temporal sobre `docs/` y maneja Chrome (o Edge) en *headless* por el protocolo DevTools. Busca el navegador en las rutas habituales; si no lo encuentra, define `CHROME_PATH`. La página avisa con `window.__pdfReady` cuando tipografías, imágenes y Mermaid están listos, y el script espera esa señal antes de imprimir.
+
+> Los saltos de página van por CSS (`@media print`): módulo nuevo = página nueva, y no se parten tablas, *callouts* ni figuras. Si retocas el diseño de impresión, está todo en el `<style>` de `imprimir.html`.
 
 ## 📝 Exámenes de práctica (cómo se generan)
 

@@ -12,3 +12,7 @@ Desktop.ini
 # Editores
 .vscode/
 .idea/
+
+# PDF generados con tools/generar-pdf.mjs (se regeneran cuando quieras).
+# Quita esta línea si prefieres versionarlos o publicarlos.
+pdf/

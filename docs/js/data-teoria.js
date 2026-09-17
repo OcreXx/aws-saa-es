@@ -11,7 +11,7 @@ window.TEORIA = [
   id: "01-fundamentos",
   numero: 1,
   titulo: "Fundamentos de AWS",
-  resumen: "Infraestructura global, marco Well-Architected, responsabilidad compartida y gestión de cuentas.",
+  resumen: "Infraestructura global, marco Well-Architected, responsabilidad compartida, gestión de cuentas y, además, cuotas de servicio, planes de soporte y cumplimiento.",
   peso: "~10%",
   tiempo: "30–45 min",
   teoria: [
@@ -130,6 +130,13 @@ window.TEORIA = [
           <li><strong>Pricing Calculator:</strong> estima costes <em>antes</em> de desplegar.</li>
           <li><strong>Cost Explorer:</strong> analiza costes históricos.</li>
           <li><strong>Budgets:</strong> alertas al superar un umbral de gasto.</li>
+        </ul>
+        <h3>Cuotas, soporte y cumplimiento</h3>
+        <ul>
+          <li><strong>Service Quotas:</strong> casi todo en AWS tiene un límite por cuenta y región (instancias EC2, VPC, direcciones IP elásticas, funciones Lambda simultáneas). Muchos son <strong>ampliables solicitándolo</strong>, y conviene hacerlo <em>antes</em> de un pico previsto o de un plan de DR; se pueden vigilar con alarmas de CloudWatch.</li>
+          <li><strong>AWS Artifact:</strong> portal de autoservicio para descargar los <strong>informes de cumplimiento</strong> de AWS (SOC, ISO, PCI DSS) y firmar acuerdos como el BAA de HIPAA.</li>
+          <li><strong>AWS Trusted Advisor:</strong> revisa la cuenta en cinco categorías (coste, rendimiento, seguridad, tolerancia a fallos y límites de servicio). Con soporte Basic o Developer solo se ven unas pocas comprobaciones; <strong>hacen falta Business o Enterprise</strong> para todas.</li>
+          <li><strong>Planes de soporte:</strong> Basic (gratis) → Developer → <strong>Business</strong> (soporte 24/7, todos los checks de Trusted Advisor, acceso a la API de Support) → <strong>Enterprise</strong> (TAM dedicado, respuesta en 15 minutos para casos críticos, <strong>Shield Response Team</strong>).</li>
         </ul>`
     }
   ],
@@ -782,7 +789,7 @@ graph TD
   id: "03-computo",
   numero: 3,
   titulo: "Cómputo",
-  resumen: "EC2 y modelos de precios, balanceadores de carga (ALB/NLB, sticky sessions, cross-zone), ENI e IP elástica, Auto Scaling, Lambda, contenedores y opciones híbridas.",
+  resumen: "EC2, AMI y modelos de precios; balanceadores (ALB/NLB, drenaje, TLS); Auto Scaling con plantillas, hooks y warm pools; Lambda a fondo (concurrencia, VPC); contenedores ECS/EKS/Fargate; placement groups y EFA.",
   peso: "~20–25%",
   tiempo: "60–90 min",
   teoria: [
@@ -801,7 +808,58 @@ graph TD
             <tr><td>Dedicated Hosts</td><td>—</td><td>Ninguno/1–3 años</td><td>Cumplimiento, BYOL de licencias</td><td>No</td></tr>
           </tbody>
         </table></div>
-        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p><strong>Atajo de examen:</strong> "tolera interrupciones y minimiza coste" → <strong>Spot</strong>. "24/7 estable" → <strong>Reserved</strong>. "servidor físico dedicado / BYOL" → <strong>Dedicated Hosts</strong>. Instancias <strong>T</strong> = rendimiento base con créditos de ráfaga.</p></div></div>`
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p><strong>Atajo de examen:</strong> "tolera interrupciones y minimiza coste" → <strong>Spot</strong>. "24/7 estable" → <strong>Reserved</strong>. "servidor físico dedicado / BYOL" → <strong>Dedicated Hosts</strong>. Instancias <strong>T</strong> = rendimiento base con créditos de ráfaga.</p></div></div>
+        <h3>Spot a fondo</h3>
+        <ul>
+          <li>AWS recupera la capacidad con un <strong>aviso de interrupción de 2 minutos</strong> (y una <em>rebalance recommendation</em> antes, cuando el riesgo sube).</li>
+          <li><strong>Spot Fleet / EC2 Fleet:</strong> piden capacidad combinando varios tipos de instancia y AZ con una estrategia de asignación (<em>capacity-optimized</em> es la que menos interrupciones sufre; <em>lowest-price</em> la más barata).</li>
+          <li><strong>Política de instancias mixtas</strong> en un ASG: una base On-Demand para garantizar servicio y el resto en Spot repartido entre varios tipos. Es el patrón recomendado.</li>
+          <li>No uses Spot para nodos con estado (bases de datos, el nodo maestro de un clúster) ni para cargas que no puedan reintentarse.</li>
+        </ul>
+        <h3>Tenencia del hardware</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Tenencia</th><th>Qué garantiza</th><th>Cuándo</th></tr></thead>
+          <tbody>
+            <tr><td>Compartida (por defecto)</td><td>Hardware compartido con otros clientes</td><td>Todo lo normal</td></tr>
+            <tr><td><strong>Dedicated Instance</strong></td><td>Hardware físico no compartido, pero AWS decide en qué servidor (puede cambiar al parar/arrancar)</td><td>Requisito de aislamiento</td></tr>
+            <tr><td><strong>Dedicated Host</strong></td><td>Un servidor físico concreto y persistente, con visibilidad de sockets y núcleos</td><td><strong>BYOL</strong> con licencias por socket/core (Windows, Oracle), auditoría de hardware</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Si la pregunta menciona <strong>licencias por socket o por núcleo</strong> → <strong>Dedicated Host</strong> (es el único que muestra el hardware). Si solo pide "hardware no compartido" → basta <strong>Dedicated Instance</strong>.</p></div></div>`
+    },
+    {
+      id: "ami-metadatos",
+      titulo: "AMI, metadatos y ciclo de vida de la instancia",
+      html: `
+        <h3>AMI (Amazon Machine Image)</h3>
+        <p>Una <strong>AMI</strong> es la plantilla desde la que arranca una instancia: sistema operativo, software preinstalado, permisos de lanzamiento y los <strong>snapshots de EBS</strong> de sus volúmenes.</p>
+        <ul>
+          <li>Es un recurso <strong>regional</strong>: para usarla en otra región hay que <strong>copiarla</strong> (la copia recibe un ID nuevo). Copiar entre regiones es la base de un DR con AMI lista.</li>
+          <li>Se puede <strong>compartir con otras cuentas</strong> (o hacerla pública). Si sus snapshots están cifrados con una clave gestionada por el cliente, además hay que <strong>dar permiso sobre esa clave KMS</strong> a la cuenta destino.</li>
+          <li><strong>Golden AMI:</strong> AMI con la aplicación y la configuración ya dentro. Arranca mucho más rápido que instalar todo con <em>user data</em> en cada escalado, así que es lo ideal para un Auto Scaling group.</li>
+          <li><strong>EC2 Image Builder:</strong> automatiza construir, probar, parchear y distribuir AMIs (y contenedores) de forma programada, incluso a varias regiones y cuentas.</li>
+        </ul>
+        <h3>User data y metadatos de instancia</h3>
+        <ul>
+          <li><strong>User data:</strong> script de arranque (<em>bootstrap</em>) que se ejecuta como root la primera vez que arranca la instancia: instalar paquetes, registrar la instancia, descargar configuración.</li>
+          <li><strong>Metadatos de instancia:</strong> se consultan en <code>169.254.169.254</code> e incluyen el ID, la IP, la AZ y, sobre todo, las <strong>credenciales temporales del rol IAM</strong> asociado.</li>
+        </ul>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>Exige <strong>IMDSv2</strong> (metadatos orientados a sesión con token). Con IMDSv1 una vulnerabilidad <strong>SSRF</strong> en la aplicación permite pedir los metadatos y <strong>robar las credenciales del rol</strong>. Si el examen habla de proteger las credenciales de instancia frente a SSRF → IMDSv2.</p></div></div>
+        <h3>Parar, hibernar y terminar</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Acción</th><th>Qué ocurre</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Stop / Start</strong></td><td>La instancia cambia de host físico: se <strong>pierde el instance store</strong> y la IP pública (salvo que uses una EIP). El EBS persiste. No se factura el cómputo.</td></tr>
+            <tr><td><strong>Hibernar</strong></td><td>Guarda la <strong>memoria RAM en el volumen raíz</strong> (que debe estar cifrado y ser suficientemente grande) y la restaura al arrancar: procesos y caché intactos, arranque muy rápido.</td></tr>
+            <tr><td><strong>Terminar</strong></td><td>Se elimina la instancia; el volumen raíz se borra salvo que se cambie <em>DeleteOnTermination</em>.</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Procesadores y rendimiento</h3>
+        <ul>
+          <li><strong>AWS Graviton (ARM):</strong> hasta ~40% mejor relación precio/rendimiento en cargas compatibles (Linux, contenedores, Lambda, RDS, ElastiCache). Respuesta típica a "bajar coste sin perder rendimiento y podemos recompilar".</li>
+          <li><strong>Nitro:</strong> la plataforma moderna de EC2; habilita instancias más rápidas, EBS de alto rendimiento y <em>enclaves</em> para datos sensibles.</li>
+          <li><strong>EBS-optimized:</strong> ancho de banda dedicado entre la instancia y EBS (en las familias actuales viene de serie).</li>
+        </ul>`
     },
     {
       id: "balanceadores",
@@ -840,7 +898,24 @@ graph TD
             <tr><td>Coste entre AZ</td><td>Gratis</td><td>Se cobra transferencia entre AZ si se activa</td></tr>
           </tbody>
         </table></div>
-        <div class="callout callout--key"><div class="callout__icon">★</div><div><p><strong>ALB</strong> para enrutar por ruta/host o autenticar con Cognito/WAF. <strong>NLB</strong> cuando pidan IP estática/EIP, TCP/UDP, preservar la IP de origen o rendimiento extremo.</p></div></div>`
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p><strong>ALB</strong> para enrutar por ruta/host o autenticar con Cognito/WAF. <strong>NLB</strong> cuando pidan IP estática/EIP, TCP/UDP, preservar la IP de origen o rendimiento extremo.</p></div></div>
+        <h3>Ajustes que caen en el examen</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Ajuste</th><th>Qué hace</th><th>Síntoma típico</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Deregistration delay</strong> (drenaje de conexiones)</td><td>Tiempo que el balanceador espera a que terminen las peticiones en curso antes de sacar un target (por defecto 300 s, 0–3600)</td><td>"Al escalar hacia dentro o desplegar se cortan peticiones a medias" → súbelo</td></tr>
+            <tr><td><strong>Idle timeout</strong></td><td>Tiempo que el ALB mantiene abierta una conexión sin tráfico (por defecto 60 s)</td><td>Subidas lentas o respuestas largas que se cortan a los 60 s</td></tr>
+            <tr><td><strong>Health check</strong></td><td>Ruta, umbrales de sano/insano e intervalo; el ELB deja de enviar tráfico al target insano</td><td>Instancias sanas marcadas como insanas: revisa ruta, código esperado y grupo de seguridad</td></tr>
+            <tr><td><strong>Grupos de destino ponderados</strong></td><td>Reparte un porcentaje del tráfico entre dos target groups del mismo listener</td><td>Base de los despliegues <strong>blue/green y canary</strong></td></tr>
+          </tbody>
+        </table></div>
+        <h3>TLS en el balanceador</h3>
+        <ul>
+          <li>Lo habitual es <strong>terminar TLS en el ELB</strong> con un certificado de <strong>ACM</strong> (gratis y con renovación automática) y hablar HTTP por dentro de la VPC.</li>
+          <li>El <strong>ALB</strong> admite varios certificados en un mismo listener mediante <strong>SNI</strong>, y puede redirigir HTTP a HTTPS.</li>
+          <li>El <strong>NLB</strong> puede terminar TLS (con ACM) o hacer <em>passthrough</em> TCP para que el cifrado llegue intacto a la instancia (cuando el requisito es cifrado extremo a extremo o mTLS propio).</li>
+        </ul>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>El grupo de seguridad de las instancias debe permitir el tráfico <strong>desde el grupo de seguridad del ALB</strong>, no desde internet. Es el patrón correcto y además evita saltarse el balanceador.</p></div></div>`
     },
     {
       id: "eni-eip",
@@ -872,11 +947,32 @@ graph TD
           <li><strong>Programado (Scheduled):</strong> para patrones <em>predecibles</em> ("+10 instancias los lunes a las 8:00"). Proactivo.</li>
           <li><strong>Predictivo:</strong> previsión basada en ML.</li>
         </ul>
-        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Usa <strong>health checks del ELB</strong> (mejor que solo EC2) y un <strong>periodo de gracia (grace period)</strong> mayor que el arranque de la app para no terminar instancias antes de tiempo (por defecto 300 s).</p></div></div>`
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Usa <strong>health checks del ELB</strong> (mejor que solo EC2) y un <strong>periodo de gracia (grace period)</strong> mayor que el arranque de la app para no terminar instancias antes de tiempo (por defecto 300 s).</p></div></div>
+        <h3>Horizontal frente a vertical</h3>
+        <ul>
+          <li><strong>Escalado vertical:</strong> una máquina más grande (cambiar el tipo de instancia, subir la memoria de una Lambda, pasar a una clase de RDS mayor). Es sencillo, pero tiene techo y normalmente implica <strong>reiniciar</strong> el recurso. Es lo típico para una base de datos relacional que escribe.</li>
+          <li><strong>Escalado horizontal:</strong> más copias del mismo componente tras un balanceador (el ASG, más tasks de ECS, más réplicas de lectura). No tiene techo práctico, tolera fallos y es lo que pide casi siempre el examen. Requiere que la aplicación sea <strong>sin estado</strong>.</li>
+        </ul>
+        <h3>Plantillas de lanzamiento (launch templates)</h3>
+        <p>El ASG necesita saber <em>qué</em> lanzar. La <strong>plantilla de lanzamiento</strong> define AMI, tipo de instancia, grupos de seguridad, rol IAM, user data y opciones de Spot; admite <strong>versiones</strong> y es la única opción recomendada: las antiguas <em>launch configurations</em> están descatalogadas y no soportan instancias mixtas ni las funciones nuevas.</p>
+        <h3>Ciclo de vida y control del escalado</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Mecanismo</th><th>Para qué sirve</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Lifecycle hooks</strong></td><td>Pausan la instancia al entrar (<em>Pending:Wait</em>) o al salir (<em>Terminating:Wait</em>) para ejecutar acciones: instalar software, registrar en un inventario o <strong>volcar los logs antes de terminarla</strong></td></tr>
+            <tr><td><strong>Warm pool</strong></td><td>Mantiene instancias ya inicializadas y paradas listas para entrar en servicio en segundos: la solución cuando el arranque de la app es muy lento</td></tr>
+            <tr><td><strong>Cooldown</strong></td><td>Periodo tras una acción de escalado en el que no se lanza otra, para no sobrerreaccionar (por defecto 300 s)</td></tr>
+            <tr><td><strong>Política de terminación</strong></td><td>Decide a quién matar al escalar hacia dentro (por defecto: equilibra AZ y elimina la de la plantilla más antigua o la más cercana a la siguiente hora facturada)</td></tr>
+            <tr><td><strong>Protección de escalado</strong> (<em>instance protection</em>)</td><td>Marca instancias que el ASG no puede terminar: p. ej. la que está procesando un trabajo largo</td></tr>
+            <tr><td><strong>Instancias mixtas</strong></td><td>Combina On-Demand y Spot con varios tipos de instancia en el mismo ASG (base On-Demand + porcentaje Spot)</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Atajos: "ejecutar un script antes de terminar la instancia" → <strong>lifecycle hook</strong>. "la app tarda 10 minutos en arrancar y el escalado llega tarde" → <strong>warm pool</strong> (o golden AMI). "escala de golpe ×10 a las 9:00 todos los días" → escalado <strong>programado</strong> o <strong>predictivo</strong>, no target tracking.</p></div></div>
+        <p>Un ASG debe abarcar <strong>varias AZ</strong>: reparte las instancias de forma equilibrada y, si una AZ cae, lanza capacidad en las demás. Junto con el ALB y Multi-AZ es el patrón estándar de alta disponibilidad.</p>`
     },
     {
       id: "serverless",
-      titulo: "Serverless: Lambda, contenedores y orquestación",
+      titulo: "Serverless: Lambda y Step Functions",
       html: `
         <h3>AWS Lambda</h3>
         <p>Cómputo sin servidores, dirigido por eventos, con escalado automático y pago por petición + duración (GB-segundo). Límites clave:</p>
@@ -886,17 +982,57 @@ graph TD
           <li>Escala de forma concurrente automáticamente (1.000 concurrentes por defecto).</li>
         </ul>
         <p>Disparadores típicos: API Gateway, eventos de S3, DynamoDB Streams, EventBridge, SNS, SQS.</p>
-        <h3>Contenedores</h3>
+        <h3>Concurrencia y arranques en frío</h3>
         <div class="tablewrap"><table>
-          <thead><tr><th>Servicio</th><th>Qué es</th></tr></thead>
+          <thead><tr><th>Concepto</th><th>Qué es</th><th>Para qué</th></tr></thead>
           <tbody>
-            <tr><td><strong>ECS</strong></td><td>Orquestador de contenedores nativo de AWS</td></tr>
-            <tr><td><strong>EKS</strong></td><td>Kubernetes gestionado (AWS gestiona el control plane)</td></tr>
-            <tr><td><strong>Fargate</strong></td><td>Contenedores sin servidor (sin gestionar EC2), sobre ECS o EKS</td></tr>
+            <tr><td><strong>Arranque en frío</strong> (cold start)</td><td>Latencia extra al crear un entorno de ejecución nuevo (peor con VPC, paquetes grandes o runtimes pesados como Java)</td><td>Síntoma: "la primera petición tarda mucho"</td></tr>
+            <tr><td><strong>Concurrencia aprovisionada</strong></td><td>Mantiene N entornos inicializados y calientes</td><td><strong>Elimina el arranque en frío</strong> en APIs sensibles a la latencia (tiene coste fijo)</td></tr>
+            <tr><td><strong>Concurrencia reservada</strong></td><td>Reserva parte del límite de la cuenta para una función y a la vez la limita a ese máximo</td><td>Garantizar capacidad a una función crítica o <strong>proteger una base de datos</strong> de demasiadas conexiones simultáneas</td></tr>
+            <tr><td><strong>SnapStart</strong></td><td>Cachea un snapshot del entorno ya inicializado (Java)</td><td>Reduce el arranque en frío sin coste de concurrencia aprovisionada</td></tr>
           </tbody>
         </table></div>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>El límite por defecto son <strong>1.000 ejecuciones concurrentes por cuenta y región</strong>. Al superarlo las invocaciones se rechazan (<em>throttling</em>): las asíncronas se reintentan y acaban en la <strong>DLQ / destino de error</strong>, las síncronas devuelven error al cliente.</p></div></div>
+        <h3>Lambda dentro de una VPC</h3>
+        <p>Por defecto una Lambda vive fuera de tu VPC y no ve los recursos privados. Si la asocias a subredes de la VPC, crea <strong>ENIs</strong> en ellas y ya puede hablar con RDS, ElastiCache o un endpoint privado.</p>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Una Lambda en subredes privadas <strong>pierde el acceso a internet</strong>: para salir necesita un <strong>NAT Gateway</strong> (o un VPC endpoint para hablar con servicios de AWS). Es un fallo clásico: "la función no llega a una API externa desde la VPC".</p></div></div>
+        <h3>Otras piezas de Lambda</h3>
+        <ul>
+          <li><strong>Capas (layers):</strong> dependencias o librerías comunes compartidas entre funciones, fuera del paquete de despliegue.</li>
+          <li><strong>Destinos y DLQ:</strong> en invocaciones asíncronas puedes enviar el resultado de éxito o de error a SQS, SNS, EventBridge u otra Lambda.</li>
+          <li><strong>Event source mapping:</strong> para SQS, Kinesis y DynamoDB Streams es Lambda quien <em>sondea</em> la fuente y agrupa registros en lotes (con tamaño de lote, ventana y reintentos configurables).</li>
+          <li><strong>Empaquetado:</strong> zip de hasta 50 MB (250 MB descomprimido) o <strong>imagen de contenedor</strong> de hasta 10 GB. Almacenamiento temporal en <code>/tmp</code> de 512 MB a 10 GB, o EFS montado para datos compartidos.</li>
+        </ul>
         <h3>Step Functions</h3>
         <p>Orquesta flujos serverless: coordina varias Lambda con reintentos, manejo de errores, ejecución en paralelo y lógica condicional (máquina de estados).</p>`
+    },
+    {
+      id: "contenedores",
+      titulo: "Contenedores: ECS, EKS, Fargate y ECR",
+      html: `
+        <div class="tablewrap"><table>
+          <thead><tr><th>Servicio</th><th>Qué es</th><th>Cuándo elegirlo</th></tr></thead>
+          <tbody>
+            <tr><td><strong>ECS</strong></td><td>Orquestador de contenedores propio de AWS, sencillo y muy integrado (ALB, IAM, CloudWatch)</td><td>Es la opción por defecto si no hay requisito de Kubernetes</td></tr>
+            <tr><td><strong>EKS</strong></td><td>Kubernetes gestionado: AWS opera el <em>control plane</em> (multi-AZ) y tú los nodos (EC2 o Fargate)</td><td>Ya usas Kubernetes, quieres <strong>portabilidad</strong> entre nubes o su ecosistema (Helm, operadores)</td></tr>
+            <tr><td><strong>Fargate</strong></td><td>Modo <em>sin servidor</em> para ECS y EKS: no gestionas ni parcheas instancias, pagas por vCPU y memoria del task</td><td>"Sin gestionar servidores", cargas intermitentes, menos trabajo operativo</td></tr>
+            <tr><td><strong>ECR</strong></td><td>Registro privado de imágenes, con escaneo de vulnerabilidades y replicación entre regiones</td><td>Guardar las imágenes (se integra con Inspector)</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Los dos roles de un task de ECS — muy preguntado</h3>
+        <ul>
+          <li><strong>Task execution role:</strong> lo usa el <em>agente</em> de ECS para <strong>arrancar</strong> el task: descargar la imagen de ECR, escribir logs en CloudWatch y leer secretos de Secrets Manager o Parameter Store.</li>
+          <li><strong>Task role:</strong> lo usa <strong>tu aplicación</strong> dentro del contenedor para llamar a servicios de AWS (S3, DynamoDB, SQS...).</li>
+        </ul>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>"El contenedor no puede leer de S3" → falta permiso en el <strong>task role</strong>. "El task no arranca porque no descarga la imagen o no escribe logs" → falta permiso en el <strong>task execution role</strong>.</p></div></div>
+        <h3>Red y escalado</h3>
+        <ul>
+          <li><strong>Modo de red awsvpc:</strong> cada task recibe su propia ENI e IP privada y su <strong>grupo de seguridad</strong> (obligatorio en Fargate). Es lo que permite aislar tasks entre sí.</li>
+          <li><strong>Service Auto Scaling:</strong> ajusta el número de tasks por CPU, memoria o peticiones por target del ALB; con EC2 además hacen falta <strong>capacity providers</strong> (o un ASG) para añadir instancias donde colocarlos.</li>
+          <li><strong>Balanceo:</strong> el ALB registra los tasks por IP y admite puerto dinámico, de modo que varias copias del mismo contenedor conviven en una instancia.</li>
+          <li><strong>Almacenamiento:</strong> para estado compartido entre tasks, monta <strong>EFS</strong> (Fargate lo soporta); los volúmenes locales del task son efímeros.</li>
+        </ul>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Coste: contenedores de larga vida y uso estable salen más baratos en <strong>EC2 con Savings Plans o Spot</strong>; cargas irregulares o picos cortos, en <strong>Fargate</strong> (incluido Fargate Spot).</p></div></div>`
     },
     {
       id: "avanzado",
@@ -908,6 +1044,15 @@ graph TD
           <li><strong>Spread:</strong> en racks distintos, máximo 7 por AZ; para instancias críticas.</li>
           <li><strong>Partition:</strong> apps distribuidas (Hadoop, Kafka, Cassandra).</li>
         </ul>
+        <h3>Red de alto rendimiento: ENA y EFA</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Adaptador</th><th>Qué aporta</th><th>Cuándo</th></tr></thead>
+          <tbody>
+            <tr><td><strong>ENA</strong> (Enhanced Networking)</td><td>Red acelerada por SR-IOV: hasta 100+ Gbps, menos latencia y menos CPU. Viene activado en las familias modernas</td><td>Cualquier carga que necesite mucho ancho de banda</td></tr>
+            <tr><td><strong>EFA</strong> (Elastic Fabric Adapter)</td><td>Una ENA que además permite <strong>saltarse el sistema operativo</strong> (bypass del kernel) para comunicación entre nodos con latencia muy baja y consistente. Habla <strong>MPI</strong> y NCCL</td><td><strong>HPC</strong>, simulación, CFD y entrenamiento distribuido de modelos de ML</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Patrón de examen: "cluster HPC fuertemente acoplado que usa <strong>MPI</strong> y necesita la mínima latencia entre nodos" → <strong>EFA + cluster placement group</strong> en la misma AZ. Solo Linux, y el EFA no atraviesa placement groups ni AZ distintas.</p></div></div>
         <h3>Estado de sesión</h3>
         <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Con varias instancias tras un ALB, guarda el estado de sesión en un almacén <strong>externo</strong> (ElastiCache o DynamoDB), no en disco local ni con <em>sticky sessions</em>: así cualquier instancia atiende cualquier petición y no se pierde al fallar una.</p></div></div>
         <h3>Opciones híbridas y de borde</h3>
@@ -915,6 +1060,10 @@ graph TD
           <li><strong>Outposts:</strong> infraestructura AWS en tu propio centro de datos (experiencia híbrida consistente).</li>
           <li><strong>Wavelength:</strong> cómputo en el borde de redes 5G (ultra baja latencia móvil).</li>
           <li><strong>AWS Batch:</strong> ejecución gestionada de trabajos por lotes con aprovisionamiento y planificación automáticos.</li>
+          <li><strong>WorkSpaces:</strong> escritorios virtuales (VDI) gestionados para empleados y teletrabajo; <strong>AppStream 2.0</strong> transmite una <em>aplicación</em> concreta al navegador sin instalarla.</li>
+          <li><strong>VMware Cloud on AWS:</strong> ejecutar tu entorno VMware existente sobre infraestructura de AWS, sin reconvertir las máquinas virtuales.</li>
+          <li><strong>ECS Anywhere</strong> y <strong>EKS Anywhere</strong> llevan la gestión de contenedores a tu propio hardware; <strong>EKS Distro</strong> es la distribución de Kubernetes que usa EKS, para ejecutarla por tu cuenta.</li>
+          <li><strong>Serverless Application Repository:</strong> catálogo de aplicaciones serverless listas para desplegar en tu cuenta.</li>
         </ul>`
     }
   ],
@@ -1033,7 +1182,7 @@ graph TD
   id: "04-almacenamiento",
   numero: 4,
   titulo: "Almacenamiento",
-  resumen: "S3 (bucket/objeto/prefijo, clases, cifrado, ciclo de vida, seguridad y funciones como Select, CORS, URLs prefirmadas y Access Points); volúmenes EBS, almacenamiento efímero y sistemas de archivos EFS/FSx.",
+  resumen: "S3 a fondo (clases, replicación y RTC, Glacier, cifrado, sitio web estático, Batch Operations); EBS (gp3 vs gp2, io1 vs io2, Multi-Attach, snapshots y cifrado); EFS y FSx; y copias centralizadas con AWS Backup.",
   peso: "~15–20%",
   tiempo: "60–75 min",
   teoria: [
@@ -1096,7 +1245,27 @@ graph TD
           <li><strong>Notificaciones de eventos:</strong> disparan Lambda, SQS o SNS al crear/borrar objetos (arquitecturas por eventos).</li>
           <li><strong>Transfer Acceleration:</strong> acelera <em>subidas</em> globales usando ubicaciones de borde.</li>
           <li><strong>Multipart Upload:</strong> obligatorio para objetos &gt; 5 GB, recomendado &gt; 100 MB; sube partes en paralelo. Tamaño máx. de objeto: 5 TB.</li>
+          <li><strong>MFA Delete:</strong> exige un código MFA para borrar versiones o desactivar el versionado. Solo lo puede activar la <strong>cuenta raíz</strong>. Protege frente a borrados maliciosos.</li>
+          <li><strong>Consistencia fuerte:</strong> desde 2020 S3 es <em>read-after-write</em> fuertemente consistente para PUT, DELETE y listados, sin coste ni configuración (ya no hay que "esperar" a que se propague).</li>
         </ul>
+        <h3>Replicación con más detalle</h3>
+        <ul>
+          <li>Requiere <strong>versionado en origen y destino</strong> y un <strong>rol IAM</strong> que S3 asume para copiar. Es <strong>asíncrona</strong>.</li>
+          <li>Solo replica los objetos <strong>nuevos</strong> desde que se activa la regla; para los anteriores hace falta <strong>S3 Batch Replication</strong>.</li>
+          <li><strong>RTC (Replication Time Control):</strong> replica el 99,99% de los objetos en <strong>menos de 15 minutos</strong>, con SLA y métricas. Es la respuesta cuando piden un <strong>RPO garantizado</strong> en la replicación.</li>
+          <li>No es transitiva (A→B y B→C no implica A→C, salvo que se configure) y los borrados solo se replican si activas la réplica de <em>delete markers</em>.</li>
+          <li>Casos: <strong>CRR</strong> para DR, cumplimiento o acercar datos a usuarios de otra región; <strong>SRR</strong> para agregar logs o separar producción de un entorno de pruebas.</li>
+        </ul>
+        <h3>Recuperar desde Glacier</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Clase</th><th>Modos de recuperación</th><th>Tiempo</th></tr></thead>
+          <tbody>
+            <tr><td>Glacier Instant Retrieval</td><td>Directa</td><td>Milisegundos</td></tr>
+            <tr><td>Glacier Flexible Retrieval</td><td><strong>Expedited</strong> / Standard / <strong>Bulk</strong></td><td>1–5 min / 3–5 h / 5–12 h (Bulk es gratis)</td></tr>
+            <tr><td>Glacier Deep Archive</td><td>Standard / Bulk</td><td>12 h / 48 h</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p><strong>S3 Glacier Vault Lock</strong> (y <strong>Object Lock en modo Compliance</strong>) aplican <strong>WORM</strong>: una vez bloqueada la política, <em>nadie</em> — ni la cuenta raíz — puede borrar los datos antes de tiempo. Es la respuesta a "retención normativa inmutable de 7 años".</p></div></div>
         <h3>Cifrado en reposo</h3>
         <div class="tablewrap"><table>
           <thead><tr><th>Método</th><th>Gestión de claves</th><th>Cuándo</th></tr></thead>
@@ -1104,9 +1273,11 @@ graph TD
             <tr><td>SSE-S3</td><td>AWS las gestiona (AES-256)</td><td>Cifrado sencillo, opción por defecto</td></tr>
             <tr><td>SSE-KMS</td><td>AWS KMS</td><td>Auditoría (CloudTrail), rotación, permisos granulares</td></tr>
             <tr><td>SSE-C</td><td>El cliente aporta la clave</td><td>Quieres controlar las claves</td></tr>
+            <tr><td>DSSE-KMS</td><td>KMS, doble capa de cifrado</td><td>Requisitos normativos muy estrictos</td></tr>
             <tr><td>Cliente</td><td>El cliente cifra antes de subir</td><td>Control total</td></tr>
           </tbody>
         </table></div>
+        <p>Desde 2023 <strong>todos los objetos se cifran por defecto con SSE-S3</strong> aunque no configures nada. Si usas SSE-KMS en un bucket con mucho tráfico, activa <strong>S3 Bucket Keys</strong>: reduce hasta un 99% las llamadas a KMS y su coste.</p>
         <p>Para acceder a S3 desde una VPC sin internet ni NAT, usa un <strong>VPC Gateway Endpoint</strong> (gratuito, solo S3 y DynamoDB).</p>`
     },
     {
@@ -1139,27 +1310,71 @@ graph TD
         <ul>
           <li>Endpoints con <strong>nombre y política propios</strong> para un bucket compartido: en vez de una bucket policy gigante, cada aplicación o equipo usa su <strong>propio access point</strong> con permisos acotados.</li>
           <li>Pueden restringirse a una <strong>VPC</strong> (acceso solo privado). Los <strong>Multi-Region Access Points</strong> dan un único endpoint global que enruta a la copia de S3 más cercana.</li>
-        </ul>`
+        </ul>
+        <h3>Alojar un sitio web estático</h3>
+        <p>Un bucket puede servir directamente HTML, CSS, JS e imágenes activando <strong>Static website hosting</strong> (con documento de índice y de error). El endpoint resultante es <strong>HTTP</strong> y el contenido tiene que ser público, así que el patrón recomendado es <strong>CloudFront delante del bucket con OAC</strong>: añade HTTPS con tu dominio, caché global, WAF y mantiene el bucket privado.</p>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Apunta el dominio raíz al sitio con un registro <strong>Alias</strong> de Route 53 (el CNAME no vale en el apex). Si el bucket devuelve <strong>403</strong> al publicarlo, revisa <em>Block Public Access</em> y la bucket policy; si es un <strong>404</strong>, el documento de índice.</p></div></div>
+        <h3>Operar sobre muchos objetos</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Función</th><th>Para qué</th></tr></thead>
+          <tbody>
+            <tr><td><strong>S3 Batch Operations</strong></td><td>Ejecuta una acción sobre <strong>millones de objetos</strong> con un solo trabajo: copiar, cambiar de clase, sustituir etiquetas o ACL, aplicar Object Lock o invocar una Lambda por objeto</td></tr>
+            <tr><td><strong>S3 Inventory</strong></td><td>Informe programado (CSV/Parquet) con todos los objetos y sus metadatos: tamaño, clase, cifrado, estado de replicación. Suele ser la entrada de Batch Operations</td></tr>
+            <tr><td><strong>S3 Storage Lens</strong></td><td>Panel de análisis de uso y coste de <strong>toda la organización</strong>, con recomendaciones (objetos no accedidos, subidas multiparte incompletas)</td></tr>
+            <tr><td><strong>Requester Pays</strong></td><td>El <strong>solicitante</strong> paga la descarga y la petición, no el dueño del bucket. Para compartir grandes datasets sin asumir el coste de salida</td></tr>
+            <tr><td><strong>S3 Object Lambda</strong></td><td>Transforma el objeto <em>al vuelo</em> al recuperarlo (redactar datos personales, convertir formatos) sin guardar copias</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Ahorro silencioso: las <strong>subidas multiparte incompletas</strong> siguen ocupando y facturando. Añade siempre una regla de ciclo de vida que las aborte a los 7 días (Storage Lens y Trusted Advisor las detectan).</p></div></div>`
     },
     {
       id: "ebs",
       titulo: "EBS: volúmenes y snapshots",
       html: `
         <div class="tablewrap"><table>
-          <thead><tr><th>Tipo</th><th>IOPS</th><th>Rendimiento</th><th>Uso</th></tr></thead>
+          <thead><tr><th>Tipo</th><th>IOPS máx.</th><th>Rendimiento</th><th>Uso</th></tr></thead>
           <tbody>
-            <tr><td><strong>gp3</strong> / gp2</td><td>16.000</td><td>1.000 MB/s</td><td>Uso general, arranque</td></tr>
-            <tr><td><strong>io2</strong> / io1</td><td>64.000+</td><td>1.000 MB/s</td><td>Bases de datos críticas, alto IOPS</td></tr>
-            <tr><td>st1</td><td>500</td><td>500 MB/s</td><td>Big data, logs (rendimiento secuencial)</td></tr>
-            <tr><td>sc1</td><td>250</td><td>250 MB/s</td><td>Datos fríos, acceso poco frecuente</td></tr>
+            <tr><td><strong>gp3</strong> (SSD)</td><td>16.000</td><td>1.000 MB/s</td><td>Uso general y arranque. La opción por defecto hoy</td></tr>
+            <tr><td>gp2 (SSD, anterior)</td><td>16.000</td><td>250 MB/s</td><td>Generación previa; los IOPS dependen del tamaño</td></tr>
+            <tr><td><strong>io2</strong> / io1 (SSD)</td><td>64.000 (256.000 con Block Express)</td><td>1.000–4.000 MB/s</td><td>Bases de datos críticas, IOPS altos y consistentes</td></tr>
+            <tr><td>st1 (HDD)</td><td>500</td><td>500 MB/s</td><td>Big data, logs (acceso secuencial)</td></tr>
+            <tr><td>sc1 (HDD)</td><td>250</td><td>250 MB/s</td><td>Datos fríos, acceso poco frecuente (el más barato)</td></tr>
           </tbody>
         </table></div>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>Los HDD (<strong>st1</strong> y <strong>sc1</strong>) <strong>no pueden ser volumen de arranque</strong>, y su rendimiento se mide en throughput, no en IOPS: sirven para lecturas secuenciales grandes, nunca para una base de datos.</p></div></div>
+        <h3>gp3 vs gp2 — por qué gp3 gana casi siempre</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th></th><th>gp2</th><th>gp3</th></tr></thead>
+          <tbody>
+            <tr><td>Rendimiento base</td><td><strong>3 IOPS por GB</strong> (mínimo 100): para 16.000 IOPS necesitas 5,3 TB aunque no uses el espacio</td><td><strong>3.000 IOPS y 125 MB/s incluidos</strong> en cualquier tamaño</td></tr>
+            <tr><td>Ampliar rendimiento</td><td>Solo agrandando el volumen</td><td><strong>IOPS y throughput se aprovisionan aparte del tamaño</strong></td></tr>
+            <tr><td>Ráfagas</td><td>Sistema de <strong>créditos de ráfaga</strong> (hasta 3.000 IOPS): al agotarse, el rendimiento se desploma</td><td>Rendimiento constante, sin créditos</td></tr>
+            <tr><td>Coste</td><td>Referencia</td><td>~20% más barato por GB</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>"El volumen va rápido un rato y luego se ralentiza" → son los <strong>créditos de ráfaga de gp2</strong> agotados: migra a <strong>gp3</strong>. "Sobreaprovisionamos un volumen enorme solo para tener IOPS" → gp3 también, porque separa IOPS de capacidad.</p></div></div>
+        <h3>io1 vs io2 y Multi-Attach</h3>
+        <ul>
+          <li><strong>Durabilidad:</strong> io2 ofrece <strong>99,999%</strong> frente al 99,8–99,9% de io1 y del resto (100 veces más fiable), <strong>al mismo precio</strong>: si el examen ofrece los dos, io2.</li>
+          <li><strong>Ratio IOPS/GB:</strong> io2 llega a 500 IOPS por GB (io1, 50), así que necesita menos capacidad para el mismo rendimiento.</li>
+          <li><strong>io2 Block Express:</strong> hasta <strong>256.000 IOPS, 4.000 MB/s y 64 TiB</strong> con latencia de microsegundos, en instancias Nitro. Para SAP HANA, Oracle o SQL Server exigentes.</li>
+          <li><strong>Multi-Attach:</strong> solo io1/io2 pueden estar conectados a <strong>hasta 16 instancias a la vez</strong>, y siempre <strong>dentro de la misma AZ</strong>. Necesita un sistema de ficheros de clúster (no vale ext4/XFS); si lo que piden es "compartido entre instancias", la respuesta correcta suele ser <strong>EFS</strong>, no Multi-Attach.</li>
+        </ul>
         <h3>Snapshots</h3>
         <ul>
           <li>Copias <strong>incrementales</strong> (solo bloques cambiados), almacenadas en S3 y gestionadas por AWS (multi-AZ).</li>
           <li>Se pueden copiar entre regiones, crear una AMI, o cifrar durante la copia.</li>
-          <li>EBS es de una sola AZ; para mover a otra AZ, haz snapshot y restaura allí.</li>
+          <li>EBS es de una sola AZ; para mover a otra AZ, haz snapshot y restaura allí. <strong>Copiar snapshots a otra región es la base de un DR de backup y restauración.</strong></li>
+          <li><strong>Fast Snapshot Restore (FSR):</strong> los volúmenes restaurados de un snapshot son "perezosos" (los primeros accesos son lentos mientras se hidratan desde S3). FSR los deja <strong>a pleno rendimiento desde el primer bloque</strong>, con un coste por snapshot y AZ.</li>
+          <li><strong>Data Lifecycle Manager (DLM):</strong> automatiza crear, retener, copiar entre regiones y borrar snapshots y AMIs según una política.</li>
           <li><strong>EBS Snapshot Archive:</strong> hasta 75% más barato para snapshots de larga retención (restauración en 24–72 h).</li>
+        </ul>
+        <h3>Cifrado de EBS</h3>
+        <ul>
+          <li>Usa <strong>KMS</strong> (AES-256) y cifra datos en reposo, en tránsito entre la instancia y el volumen, los <strong>snapshots</strong> y todos los volúmenes creados a partir de ellos. El impacto en rendimiento es inapreciable.</li>
+          <li>Un volumen <strong>no se puede descifrar</strong>, y uno sin cifrar no se cifra "in situ": el camino es <strong>snapshot → copia del snapshot con cifrado activado → volumen nuevo</strong> (o restaurar una AMI creada desde él).</li>
+          <li>Activa <strong>cifrado por defecto</strong> en la cuenta y región para que todo volumen nuevo nazca cifrado.</li>
+          <li>Para compartir un snapshot cifrado con otra cuenta hace falta una <strong>clave gestionada por el cliente</strong> y dar permiso sobre ella en la política de la clave (las claves propias de AWS no se pueden compartir).</li>
         </ul>`
     },
     {
@@ -1170,7 +1385,21 @@ graph TD
         <ul>
           <li>Sistema de archivos <strong>NFS</strong> compartido, <strong>multi-AZ</strong> por defecto, escala automáticamente y solo pagas por lo usado.</li>
           <li>Solo <strong>Linux</strong>; miles de conexiones concurrentes.</li>
+          <li>Se accede por un <strong>mount target</strong> (una ENI) <strong>en cada AZ</strong>, protegido por su grupo de seguridad: las instancias montan el de su propia AZ.</li>
         </ul>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Ajuste</th><th>Opciones</th><th>Cuándo</th></tr></thead>
+          <tbody>
+            <tr><td>Clases de almacenamiento</td><td>Standard, <strong>Standard-IA</strong>, One Zone, One Zone-IA</td><td>Una <strong>política de ciclo de vida</strong> mueve a IA los ficheros no accedidos en N días: es la forma estándar de abaratar EFS (hasta ~92%)</td></tr>
+            <tr><td>Modo de rendimiento</td><td>General Purpose / Max I/O</td><td>General Purpose para latencia baja (lo normal); Max I/O para miles de clientes en paralelo a costa de más latencia</td></tr>
+            <tr><td>Modo de throughput</td><td><strong>Elastic</strong> / Bursting / Provisioned</td><td>Elastic se ajusta solo (recomendado); Provisioned cuando necesitas más throughput del que da tu tamaño</td></tr>
+          </tbody>
+        </table></div>
+        <ul>
+          <li><strong>EFS Access Points:</strong> puntos de entrada con un usuario/grupo POSIX y un directorio raíz impuestos: cada aplicación o contenedor ve solo su carpeta. Muy usados con ECS/Fargate y Lambda.</li>
+          <li>Cifrado en reposo con KMS y en tránsito con TLS; el acceso se controla con grupos de seguridad y con <strong>políticas de sistema de archivos</strong> basadas en IAM.</li>
+        </ul>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>EFS cuesta bastante más por GB que S3 o EBS. Si la pregunta pide "abaratar EFS" la respuesta es <strong>ciclo de vida a Standard-IA</strong> (o One Zone si no necesitas resiliencia multi-AZ), no cambiar de servicio.</p></div></div>
         <h3>Familia FSx</h3>
         <div class="tablewrap"><table>
           <thead><tr><th>Tipo</th><th>SO / Protocolo</th><th>Uso</th></tr></thead>
@@ -1181,7 +1410,22 @@ graph TD
             <tr><td>FSx for OpenZFS</td><td>Linux / NFS</td><td>Cargas Linux con snapshots</td></tr>
           </tbody>
         </table></div>
-        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Archivos compartidos: <strong>Windows/SMB → FSx for Windows</strong>; <strong>Linux/NFS → EFS</strong>; <strong>HPC/ML de máximo rendimiento → FSx for Lustre</strong>.</p></div></div>`
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Archivos compartidos: <strong>Windows/SMB → FSx for Windows</strong>; <strong>Linux/NFS → EFS</strong>; <strong>HPC/ML de máximo rendimiento → FSx for Lustre</strong>.</p></div></div>
+        <p><strong>FSx for Lustre</strong> puede montarse <em>sobre</em> un bucket de S3: lee los objetos como ficheros y devuelve los resultados a S3. Es el patrón de HPC y ML sobre un data lake.</p>`
+    },
+    {
+      id: "aws-backup",
+      titulo: "Copias de seguridad centralizadas: AWS Backup",
+      html: `
+        <p><strong>AWS Backup</strong> centraliza y automatiza las copias de seguridad de muchos servicios desde un único sitio, en lugar de configurar snapshots servicio por servicio.</p>
+        <ul>
+          <li><strong>Qué protege:</strong> EBS, EC2 (la instancia entera), RDS y Aurora, DynamoDB, EFS, FSx, Storage Gateway, DocumentDB, Neptune, S3 y servidores VMware.</li>
+          <li><strong>Backup plan:</strong> define <em>cada cuánto</em> se copia, <strong>cuánto se retiene</strong>, cuándo pasa a almacenamiento <strong>frío</strong> y si se <strong>copia a otra región o a otra cuenta</strong>. Los recursos se asignan al plan por <strong>etiquetas</strong>, así que todo recurso nuevo etiquetado queda protegido automáticamente.</li>
+          <li><strong>Backup vault:</strong> el almacén cifrado con KMS donde caen los puntos de recuperación.</li>
+          <li><strong>Vault Lock (modo Compliance):</strong> hace las copias <strong>inmutables</strong>: nadie, ni un administrador ni la cuenta raíz, puede acortar la retención ni borrarlas. Es la defensa frente a <strong>ransomware</strong> y la respuesta a auditorías de retención.</li>
+          <li><strong>Multicuenta:</strong> con Organizations se aplican <strong>políticas de backup</strong> a toda una OU y se auditan con <strong>AWS Backup Audit Manager</strong>.</li>
+        </ul>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Atajo: "copias centralizadas, con retención uniforme y demostrable, de varios servicios y varias cuentas" → <strong>AWS Backup</strong>. "Snapshots de EBS/AMI automatizados y nada más" → también vale <strong>Data Lifecycle Manager</strong>, pero AWS Backup es la respuesta cuando hay <strong>cumplimiento</strong>, varias cuentas o servicios mezclados.</p></div></div>`
     }
   ],
   preguntas: [
@@ -1289,7 +1533,7 @@ graph TD
   id: "05-bases-datos",
   numero: 5,
   titulo: "Bases de datos",
-  resumen: "RDS y Aurora (endpoints, clonación, RDS Proxy, cifrado y acceso), alta disponibilidad y réplicas, DynamoDB, caché con ElastiCache (Redis vs Memcached y patrones), Redshift y bases especializadas.",
+  resumen: "RDS y Aurora (endpoints, Serverless v2, réplicas y promoción, blue/green), Multi-AZ, DynamoDB a fondo (GSI vs LSI, TTL, PITR, transacciones), ElastiCache, Redshift y bases especializadas.",
   peso: "~15–20%",
   tiempo: "60–75 min",
   teoria: [
@@ -1308,6 +1552,8 @@ graph TD
             <tr><td>Documentos compatibles con MongoDB</td><td><strong>DocumentDB</strong></td></tr>
             <tr><td>Libro contable inmutable</td><td><strong>QLDB</strong></td></tr>
             <tr><td>Compatible con Cassandra</td><td><strong>Keyspaces</strong></td></tr>
+            <tr><td>Series temporales (IoT, métricas)</td><td><strong>Timestream</strong></td></tr>
+            <tr><td>Redis en memoria <em>duradero</em> (base de datos, no solo caché)</td><td><strong>MemoryDB for Redis</strong></td></tr>
           </tbody>
         </table></div>
         <div class="callout callout--warn"><div class="callout__icon">!</div><div><p><strong>Redshift es OLAP</strong> (analítica), no OLTP (transaccional). No lo uses para operaciones transaccionales.</p></div></div>`
@@ -1336,7 +1582,9 @@ graph TD
         <ul>
           <li><strong>Clonación rápida (copy-on-write):</strong> crea una copia de la base de datos casi al instante y sin duplicar el almacenamiento (solo se copian los bloques que cambian). Ideal para montar entornos de prueba con datos de producción.</li>
           <li><strong>Aurora Machine Learning:</strong> integra <strong>SageMaker</strong> y <strong>Comprehend</strong> para invocar predicciones de ML <strong>desde SQL</strong>, sin mover los datos.</li>
-          <li><strong>Aurora Multi-Master:</strong> permite <strong>varios nodos de escritura</strong> a la vez (disponibilidad de escritura continua). Es una opción especializada y con limitaciones; para la mayoría de casos basta con un writer + réplicas de lectura.</li>
+          <li><strong>Aurora Serverless v2:</strong> escala el cómputo <em>en caliente</em> y de forma granular (en <strong>ACU</strong>, de <strong>0 a 256</strong>) sin cortar conexiones, y admite Multi-AZ, réplicas y Global Database. Con capacidad mínima de <strong>0 ACU</strong> se <strong>pausa automáticamente</strong> cuando no hay carga y se reanuda al llegar una conexión, así que ya no es la v1 la única que llegaba a cero. Es la versión vigente; la v1 escalaba a saltos y está descatalogada.</li>
+          <li><strong>Prioridad de failover (tiers 0–15):</strong> Aurora promociona la réplica con el <em>tier</em> más bajo y, a igualdad de tier, la de mayor tamaño. Así decides qué réplica se convierte en writer.</li>
+          <li><strong>Aurora Multi-Master</strong> (varios nodos de escritura simultáneos) fue una opción especializada de Aurora MySQL 5.6 y <strong>ya no está disponible</strong> en las versiones actuales: hoy la respuesta es un writer + réplicas de lectura, o Global Database escribiendo en la región principal.</li>
         </ul>`
     },
     {
@@ -1381,6 +1629,30 @@ graph TD
           <li><strong>Backups automáticos:</strong> recuperación a un punto en el tiempo (retención 1–35 días). Se borran al eliminar la instancia.</li>
           <li><strong>Snapshots manuales:</strong> los inicia el usuario, se conservan indefinidamente y se pueden copiar a otra región.</li>
           <li>El cifrado en reposo (KMS) debe activarse al crear; no se puede cifrar una BD existente (crea una nueva desde snapshot).</li>
+        </ul>
+        <h3>Réplicas de lectura: detalles que caen</h3>
+        <ul>
+          <li>Hasta <strong>15 réplicas</strong> por instancia en MySQL, MariaDB y PostgreSQL (5 en Oracle y SQL Server), y 15 en Aurora. Pueden estar en <strong>otra AZ o en otra región</strong>.</li>
+          <li><strong>Promoción:</strong> una réplica puede <strong>promocionarse a instancia independiente</strong>. Una réplica de lectura <strong>cross-region promovida</strong> es la receta clásica de DR para RDS (RPO de segundos/minutos, RTO de minutos).</li>
+          <li>Ojo al coste: la replicación <strong>entre regiones</strong> paga transferencia de datos; dentro de la misma región entre AZ, en RDS, no se cobra.</li>
+          <li>La aplicación debe apuntar explícitamente al <strong>endpoint de la réplica</strong> para leer de ella (en Aurora, al <em>reader endpoint</em>).</li>
+        </ul>
+        <h3>Multi-AZ clásico vs Multi-AZ DB cluster</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th></th><th>Multi-AZ (instancia)</th><th>Multi-AZ DB cluster</th></tr></thead>
+          <tbody>
+            <tr><td>Topología</td><td>1 primaria + 1 standby</td><td>1 escritor + <strong>2 standby en otras 2 AZ</strong></td></tr>
+            <tr><td>¿Se lee del standby?</td><td><strong>No</strong></td><td><strong>Sí</strong>, son legibles</td></tr>
+            <tr><td>Failover</td><td>1–2 min</td><td>Normalmente &lt; 35 s</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Operación y despliegues</h3>
+        <ul>
+          <li><strong>Escalado automático de almacenamiento:</strong> RDS amplía el disco solo al acercarse al límite (defines un techo). Evita la caída por disco lleno.</li>
+          <li><strong>Blue/Green Deployments:</strong> crea un entorno verde sincronizado para actualizar la versión del motor o el esquema y hacer el cambio en <strong>menos de un minuto</strong>, con vuelta atrás fácil.</li>
+          <li><strong>Performance Insights</strong> (qué consultas cargan la base de datos) y <strong>Enhanced Monitoring</strong> (métricas del sistema operativo cada segundo) para diagnosticar cuellos de botella.</li>
+          <li><strong>Eventos de RDS</strong> a SNS: avisan de failover, bajo espacio, fin de backup, etc.</li>
+          <li>Las <strong>ventanas de mantenimiento</strong> aplican parches (en Multi-AZ, primero al standby y luego con failover, minimizando la parada).</li>
         </ul>`
     },
     {
@@ -1396,10 +1668,37 @@ graph TD
             <tr><td>GSI</td><td>Índice secundario global: consultar por atributos que no son clave</td></tr>
             <tr><td>Streams</td><td>Captura de cambios; puede disparar Lambda</td></tr>
             <tr><td>DAX</td><td>Caché en memoria: latencia de <strong>microsegundos</strong></td></tr>
-            <tr><td>Global Tables</td><td>Replicación multi-región activa-activa (lecturas globales rápidas)</td></tr>
+            <tr><td>Global Tables</td><td>Replicación multi-región activa-activa (lecturas globales rápidas). Por defecto la consistencia entre regiones es <strong>eventual</strong>; también existe el modo de <strong>consistencia fuerte multirregión (MRSC)</strong></td></tr>
           </tbody>
         </table></div>
-        <p><strong>Modos de capacidad:</strong> <em>Provisioned</em> (RCU/WCU fijos, más barato si es predecible) u <em>On-Demand</em> (pago por petición, para tráfico impredecible). <strong>Consistencia:</strong> eventual (por defecto, más barata) o fuerte (refleja las últimas escrituras).</p>`
+        <p><strong>Modos de capacidad:</strong> <em>Provisioned</em> (RCU/WCU fijos, más barato si es predecible) u <em>On-Demand</em> (pago por petición, para tráfico impredecible). <strong>Consistencia:</strong> eventual (por defecto, más barata) o fuerte (refleja las últimas escrituras).</p>
+        <h3>Índices: GSI vs LSI — muy preguntado</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th></th><th>GSI (global)</th><th>LSI (local)</th></tr></thead>
+          <tbody>
+            <tr><td>Clave</td><td>Clave de partición <strong>distinta</strong> de la tabla</td><td><strong>Misma</strong> clave de partición, otra clave de ordenación</td></tr>
+            <tr><td>Cuándo se crea</td><td>En cualquier momento</td><td><strong>Solo al crear la tabla</strong> (no se añade después)</td></tr>
+            <tr><td>Capacidad</td><td>La suya propia (RCU/WCU separados)</td><td>Comparte la de la tabla</td></tr>
+            <tr><td>Consistencia</td><td>Solo eventual</td><td>Admite lectura <strong>fuertemente consistente</strong></td></tr>
+            <tr><td>Límite</td><td>20 por tabla</td><td>5 por tabla, y máx. 10 GB por valor de clave de partición</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>"Consultar por un atributo que no es la clave" → <strong>GSI</strong>. "Otra forma de ordenar dentro de la misma partición y con consistencia fuerte" → <strong>LSI</strong>, pero solo si se pensó al crear la tabla. Si el GSI se queda sin capacidad, el <strong>throttling se contagia a las escrituras de la tabla</strong>.</p></div></div>
+        <h3>Capacidad, rendimiento y errores</h3>
+        <ul>
+          <li><strong>Auto Scaling</strong> ajusta RCU/WCU en modo provisionado; <strong>capacidad adaptativa</strong> (automática) reparte capacidad hacia particiones calientes y aísla los elementos más pedidos.</li>
+          <li><strong>ProvisionedThroughputExceededException:</strong> síntoma de clave de partición mal elegida (poca cardinalidad) o de picos: reintenta con <em>backoff exponencial</em>, cambia a On-Demand o mete <strong>DAX</strong> delante para lecturas.</li>
+          <li><strong>Capacidad reservada:</strong> compromiso de 1–3 años sobre RCU/WCU para abaratar cargas estables.</li>
+          <li>Tamaño máximo de un elemento: <strong>400 KB</strong>. Para ficheros grandes, guarda el objeto en <strong>S3</strong> y en DynamoDB solo el puntero.</li>
+        </ul>
+        <h3>Datos, copias y operaciones</h3>
+        <ul>
+          <li><strong>TTL:</strong> un atributo con fecha de caducidad y DynamoDB <strong>borra solo</strong> los elementos vencidos, gratis. Ideal para sesiones, carritos o datos temporales (y el borrado aparece en Streams).</li>
+          <li><strong>PITR:</strong> recuperación a cualquier segundo de los <strong>últimos 35 días</strong>. Los <strong>backups bajo demanda</strong> se guardan indefinidamente. Ambos sin afectar al rendimiento.</li>
+          <li><strong>Transacciones:</strong> ACID sobre varios elementos y hasta 100 acciones; para todo lo demás bastan las <strong>escrituras condicionales</strong> (bloqueo optimista con un número de versión).</li>
+          <li><strong>Export a S3:</strong> vuelca la tabla a S3 (sin consumir capacidad) para analizarla con Athena o cargarla en Redshift.</li>
+          <li><strong>Streams + Lambda:</strong> patrón estándar para reaccionar a cambios, agregar datos o mantener otro sistema sincronizado.</li>
+        </ul>`
     },
     {
       id: "cache-dw",
@@ -1416,7 +1715,7 @@ graph TD
             <tr><td>Escalado</td><td>Réplicas de lectura y sharding (cluster mode)</td><td>Horizontal añadiendo nodos</td></tr>
           </tbody>
         </table></div>
-        <p>Se pone <strong>delante de la base de datos</strong> para reducir carga de lectura y acelerar respuestas.</p>
+        <p>Se pone <strong>delante de la base de datos</strong> para reducir carga de lectura y acelerar respuestas. <strong>ElastiCache Serverless</strong> evita dimensionar nodos, y <strong>MemoryDB for Redis</strong> es la variante <em>duradera</em> (multi-AZ con log transaccional): sirve como base de datos principal en memoria, no solo como caché.</p>
         <div class="callout callout--key"><div class="callout__icon">★</div><div><p><strong>Redis</strong> cuando pidan persistencia, alta disponibilidad (Multi-AZ/failover), réplicas o estructuras de datos ricas. <strong>Memcached</strong> para una caché simple, volátil y multinúcleo.</p></div></div>
         <h3>Seguridad de Redis</h3>
         <p>Redis admite <strong>cifrado en reposo y en tránsito (TLS)</strong> y autenticación mediante <strong>Redis AUTH</strong> (token/contraseña) o <strong>RBAC</strong> (usuarios con permisos). Memcached no ofrece estas capacidades de autenticación ni persistencia.</p>
@@ -1428,6 +1727,11 @@ graph TD
         </ul>
         <h3>Redshift</h3>
         <p>Almacén de datos (OLAP) con <strong>almacenamiento columnar</strong> y procesamiento masivamente paralelo (MPP), a escala de petabytes. <strong>Redshift Spectrum</strong> consulta datos directamente en S3.</p>
+        <ul>
+          <li><strong>Nodos RA3:</strong> separan cómputo y almacenamiento (Redshift Managed Storage), así escalas cada uno por su lado. <strong>Redshift Serverless</strong> evita dimensionar el clúster.</li>
+          <li><strong>Concurrency Scaling:</strong> añade clústeres temporales cuando llegan muchas consultas a la vez, para que no se encolen.</li>
+          <li>Los <strong>snapshots</strong> van a S3 y pueden copiarse a otra región (DR del almacén de datos).</li>
+        </ul>
         <h3>Migración</h3>
         <p><strong>DMS</strong> (Database Migration Service) migra bases de datos a AWS con mínima interrupción; junto con <strong>SCT</strong> (Schema Conversion Tool) permite migrar entre motores distintos.</p>`
     }
@@ -1551,7 +1855,7 @@ graph TD
   id: "06-redes",
   numero: 6,
   titulo: "Redes y entrega de contenido",
-  resumen: "VPC, subredes, grupos de seguridad y NACL (puertos efímeros), conectividad híbrida (VPC Peering, VPN Site-to-Site y CloudHub, Direct Connect, Transit Gateway), VPC endpoints, Route 53, CloudFront y Global Accelerator.",
+  resumen: "VPC (NAT, egress-only, DNS), SG/NACL y Network Firewall, conectividad híbrida (Peering, VPN, Direct Connect, Transit Gateway), endpoints y PrivateLink, Route 53 con Resolver híbrido, CloudFront a fondo y Global Accelerator.",
   peso: "~20–25%",
   tiempo: "75–90 min",
   teoria: [
@@ -1576,7 +1880,24 @@ graph TD
           <li><strong>NAT Gateway:</strong> permite salida a internet a las subredes <em>privadas</em> (se coloca en una subred pública). Gestionado y con alta disponibilidad por AZ; preferible al NAT Instance.</li>
           <li><strong>Tablas de rutas:</strong> definen a dónde va el tráfico. <strong>Lo que hace pública a una subred es tener una ruta 0.0.0.0/0 → IGW.</strong></li>
         </ul>
-        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Nunca pongas bases de datos en subredes públicas. Patrón típico: web/ALB en subred pública, app y BD en subredes privadas con salida vía NAT Gateway.</p></div></div>`
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Nunca pongas bases de datos en subredes públicas. Patrón típico: web/ALB en subred pública, app y BD en subredes privadas con salida vía NAT Gateway.</p></div></div>
+        <h3>NAT Gateway vs NAT Instance</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th></th><th>NAT Gateway</th><th>NAT Instance (heredado)</th></tr></thead>
+          <tbody>
+            <tr><td>Gestión</td><td>Gestionado por AWS, sin parches</td><td>Una EC2 que administras tú</td></tr>
+            <tr><td>Disponibilidad</td><td>Redundante <strong>dentro de su AZ</strong></td><td>Depende de ti (script de failover)</td></tr>
+            <tr><td>Ancho de banda</td><td>5 Gbps de base, escala solo hasta <strong>100 Gbps</strong> (y de 1 a 10 millones de paquetes/s)</td><td>El del tipo de instancia</td></tr>
+            <tr><td>Grupos de seguridad</td><td><strong>No admite</strong> (se filtra en las subredes)</td><td>Sí, y hay que <strong>desactivar la comprobación origen/destino</strong></td></tr>
+            <tr><td>Bastión</td><td>No puede hacerlo</td><td>Puede usarse también como bastión</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>Un NAT Gateway <strong>vive en una sola AZ</strong>: si esa AZ cae, las subredes privadas que rutan a él se quedan sin salida. Para alta disponibilidad, <strong>un NAT Gateway por AZ</strong> y que cada tabla de rutas apunte al de su zona. Además se factura por hora <strong>y por GB procesado</strong>: mandar el tráfico a S3 por un <strong>Gateway Endpoint</strong> ahorra ese coste.</p></div></div>
+        <p>Novedad reciente: además del NAT Gateway <strong>zonal</strong> de toda la vida existe el <strong>NAT Gateway regional</strong>, que se expande y contrae solo por las AZ donde tengas cargas (alta disponibilidad por defecto y sin necesidad de subred pública). Para el examen, la respuesta clásica sigue siendo <strong>un NAT Gateway por AZ</strong>, pero conviene que el término no te pille de nuevas.</p>
+        <h3>IPv6 y salida solo de ida</h3>
+        <p>En IPv6 todas las direcciones son públicas, así que no hay NAT: para que una subred privada IPv6 pueda <strong>salir a internet sin ser alcanzable desde fuera</strong> se usa un <strong>Egress-Only Internet Gateway</strong> (el equivalente al NAT Gateway, pero para IPv6).</p>
+        <h3>DNS dentro de la VPC</h3>
+        <p>La VPC ofrece un resolutor DNS en la segunda IP de su rango (y en <code>169.254.169.253</code>). Para que los nombres privados y las zonas privadas de Route 53 funcionen, la VPC necesita <strong>enableDnsSupport</strong> y <strong>enableDnsHostnames</strong> activados.</p>`
     },
     {
       id: "sg-nacl",
@@ -1598,7 +1919,18 @@ graph TD
           <li>Por eso, en la NACL hay que <strong>abrir también el rango de puertos efímeros</strong> en el sentido del tráfico de retorno (salida en el lado servidor, entrada en el lado cliente).</li>
           <li>Rango recomendado por AWS: <code>1024–65535</code> (varía según el sistema: Linux 32768–60999, Windows 49152–65535; NAT Gateway y ELB usan 1024–65535).</li>
         </ul>
-        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>El grupo de seguridad, al ser <strong>con estado</strong>, gestiona el retorno automáticamente: <strong>no</strong> hace falta abrir puertos efímeros en él.</p></div></div>`
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>El grupo de seguridad, al ser <strong>con estado</strong>, gestiona el retorno automáticamente: <strong>no</strong> hace falta abrir puertos efímeros en él.</p></div></div>
+        <h3>¿Y AWS Network Firewall?</h3>
+        <p>Cuando los SG y las NACL se quedan cortos, <strong>AWS Network Firewall</strong> es un firewall gestionado <strong>a nivel de VPC</strong> con inspección profunda: filtrado por <strong>dominio</strong> (allow-list de destinos de salida), reglas Suricata, IPS/IDS y control centralizado del tráfico. Se despliega en subredes propias y se gobierna a escala con <strong>Firewall Manager</strong>.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Capa</th><th>Herramienta</th><th>Qué filtra</th></tr></thead>
+          <tbody>
+            <tr><td>Instancia (ENI)</td><td>Grupo de seguridad</td><td>IP y puerto; solo permitir; con estado</td></tr>
+            <tr><td>Subred</td><td>NACL</td><td>IP y puerto; permite y <strong>deniega</strong>; sin estado</td></tr>
+            <tr><td>VPC</td><td><strong>Network Firewall</strong></td><td>Dominios, protocolos y firmas (IPS), entrada y salida</td></tr>
+            <tr><td>Aplicación (capa 7)</td><td><strong>WAF</strong></td><td>HTTP: SQLi, XSS, límite de tasa, geo (sobre ALB, CloudFront o API Gateway)</td></tr>
+          </tbody>
+        </table></div>`
     },
     {
       id: "cidr",
@@ -1628,7 +1960,13 @@ graph TD
           <li><strong>Gateway Endpoint:</strong> solo <strong>S3 y DynamoDB</strong>, se añade a la tabla de rutas. <strong>Gratuito.</strong> Solo accesible <em>desde dentro de la VPC</em>.</li>
           <li><strong>Interface Endpoint (PrivateLink):</strong> una <strong>ENI</strong> con IP privada en la subred, para casi todos los demás servicios. Con coste por hora + datos.</li>
         </ul>
-        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>El <strong>Gateway Endpoint no es accesible desde on-premises</strong> (VPN/Direct Connect) ni desde una VPC emparejada. Para llegar a S3/DynamoDB (u otro servicio) <strong>desde on-premises o entre VPC</strong>, usa un <strong>Interface Endpoint (PrivateLink)</strong>, que sí es alcanzable por VPN, Direct Connect y Peering.</p></div></div>`
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>El <strong>Gateway Endpoint no es accesible desde on-premises</strong> (VPN/Direct Connect) ni desde una VPC emparejada. Para llegar a S3/DynamoDB (u otro servicio) <strong>desde on-premises o entre VPC</strong>, usa un <strong>Interface Endpoint (PrivateLink)</strong>, que sí es alcanzable por VPN, Direct Connect y Peering.</p></div></div>
+        <h3>Políticas de endpoint y PrivateLink</h3>
+        <ul>
+          <li>Una <strong>política de endpoint</strong> limita a qué recursos se puede llegar a través de él (por ejemplo, "solo a los buckets de mi organización"). Es la forma de <strong>evitar la exfiltración</strong> de datos a buckets de terceros.</li>
+          <li>En el lado contrario, una <strong>bucket policy</strong> puede exigir la condición <code>aws:SourceVpce</code> para que el bucket <strong>solo</strong> acepte tráfico por tu endpoint.</li>
+          <li><strong>PrivateLink</strong> expone un servicio propio: se publica detrás de un <strong>NLB</strong> (o GWLB) como <em>endpoint service</em> y los consumidores lo alcanzan con un interface endpoint en su VPC, sin peering, sin rutas y <strong>sin problema de CIDR solapados</strong>. Es la forma recomendada de compartir un servicio con muchas VPC o cuentas.</li>
+        </ul>`
     },
     {
       id: "vpn-s2s",
@@ -1640,6 +1978,15 @@ graph TD
           <li>Cada conexión VPN trae <strong>2 túneles</strong> en distintas AZ para alta disponibilidad (~1,25 Gbps por túnel).</li>
           <li>Enrutado <strong>estático</strong> o <strong>dinámico (BGP)</strong>.</li>
         </ul>
+        <h3>Client VPN: usuarios, no sedes</h3>
+        <p>La Site-to-Site VPN conecta <strong>redes</strong>. Para conectar <strong>personas</strong> (teletrabajo, administradores) está <strong>AWS Client VPN</strong>: un servicio gestionado basado en <strong>OpenVPN</strong> al que cada usuario se conecta desde su portátil y entra en la VPC como un dispositivo más.</p>
+        <ul>
+          <li>Autenticación con <strong>Active Directory</strong>, SAML (IAM Identity Center) o certificados mutuos.</li>
+          <li><strong>Reglas de autorización</strong> por grupo: quién llega a qué subred o red de destino.</li>
+          <li>Con <em>split tunnel</em> solo viaja por el túnel el tráfico hacia AWS; sin él, todo el tráfico del portátil pasa por la VPC (útil para inspeccionarlo).</li>
+          <li>Da acceso también a on-premises si la VPC tiene VPN o Direct Connect.</li>
+        </ul>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Atajo: "conectar la <strong>oficina</strong> con AWS" → <strong>Site-to-Site VPN</strong>. "Que los <strong>empleados en remoto</strong> lleguen a recursos privados de la VPC" → <strong>Client VPN</strong>. "Entrar por shell a una EC2 sin bastión ni claves" → <strong>Session Manager</strong>.</p></div></div>
         <h3>AWS VPN CloudHub</h3>
         <p>Permite comunicar <strong>varias sedes entre sí</strong> (hub-and-spoke) usando un <strong>único Virtual Private Gateway</strong>: cada sede monta su VPN contra el VGW y, mediante BGP, las sedes se hablan <strong>entre ellas</strong> a través del hub. Solución sencilla y económica para conectar oficinas remotas, incluso sin VPC de por medio.</p>
         <figure class="figure">
@@ -1735,7 +2082,18 @@ graph TD
           <li><strong>Basado en alarma de CloudWatch:</strong> sigue el estado de una alarma.</li>
         </ul>
         <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>Los verificadores de Route 53 son <strong>públicos</strong>: <strong>no pueden alcanzar recursos en subredes privadas</strong> (IP privada). Para vigilar un recurso privado usa un <strong>health check basado en una alarma de CloudWatch</strong>: creas una métrica/alarma (p. ej. <code>StatusCheckFailed</code> de la instancia, o una métrica personalizada que publique una Lambda) y el health check sigue el estado de esa alarma.</p></div></div>
-        <p>Los health checks se integran con <strong>CloudWatch</strong> y pueden disparar <strong>alertas por SNS</strong> cuando un recurso pasa a no disponible.</p>`
+        <p>Los health checks se integran con <strong>CloudWatch</strong> y pueden disparar <strong>alertas por SNS</strong> cuando un recurso pasa a no disponible.</p>
+        <h3>Route 53 Resolver: DNS híbrido</h3>
+        <p>El resolutor de la VPC resuelve nombres de AWS, pero en un entorno híbrido hay que resolver <strong>en los dos sentidos</strong>. Para eso están los <strong>endpoints de Route 53 Resolver</strong>, que son ENIs en tu VPC:</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Tipo de endpoint</th><th>Dirección</th><th>Para qué</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Inbound</strong> (de entrada)</td><td>On-premises → AWS</td><td>Que tus servidores DNS del centro de datos resuelvan nombres de la VPC y de tus <strong>zonas privadas</strong></td></tr>
+            <tr><td><strong>Outbound</strong> (de salida)</td><td>AWS → on-premises</td><td>Que las instancias de la VPC resuelvan los dominios internos de la empresa, mediante <strong>reglas de reenvío</strong> por dominio</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Pregunta típica: "las instancias en AWS no resuelven <em>corp.interno</em>" → <strong>outbound endpoint + regla de reenvío</strong> hacia el DNS on-premises (sobre VPN o Direct Connect). Las reglas se comparten con otras cuentas por <strong>RAM</strong>. <strong>Route 53 Resolver DNS Firewall</strong> permite además bloquear dominios maliciosos desde la VPC.</p></div></div>
+        <p>Otras piezas: <strong>DNSSEC</strong> (firma de la zona para evitar suplantación de respuestas), <strong>Traffic Flow</strong> (editor visual para combinar políticas de enrutado complejas) y <strong>Resolver Query Logging</strong> (registro de consultas DNS a CloudWatch, S3 o Firehose).</p>`
     },
     {
       id: "cloudfront-ga",
@@ -1762,7 +2120,27 @@ graph TD
         <h3>AWS Global Accelerator</h3>
         <p>Proporciona <strong>2 IP estáticas Anycast</strong> y enruta al usuario por la <strong>red troncal de AWS</strong> hasta el <strong>endpoint sano más cercano</strong>, mejorando latencia, disponibilidad y failover entre regiones. <strong>No cachea</strong> (a diferencia de CloudFront) y sirve <strong>cualquier protocolo TCP/UDP</strong>, por lo que encaja con apps no HTTP (juegos, VoIP, IoT).</p>
         <p>Endpoints que puede tener detrás: <strong>ALB, NLB, instancias EC2</strong> y <strong>Elastic IP</strong>, en una o varias regiones.</p>
-        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>"Cachear contenido web / CDN" → <strong>CloudFront</strong>. "IP estática, TCP/UDP no HTTP, failover entre regiones y baja latencia por la red de AWS" → <strong>Global Accelerator</strong>.</p></div></div>`
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>"Cachear contenido web / CDN" → <strong>CloudFront</strong>. "IP estática, TCP/UDP no HTTP, failover entre regiones y baja latencia por la red de AWS" → <strong>Global Accelerator</strong>.</p></div></div>
+        <h3>Cómo se configura CloudFront</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Concepto</th><th>Qué hace</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Cache behavior</strong></td><td>Reglas por patrón de ruta (<code>/api/*</code>, <code>/static/*</code>) que deciden el origen, el TTL, los métodos permitidos y qué cabeceras, cookies o query strings forman parte de la <strong>clave de caché</strong></td></tr>
+            <tr><td><strong>TTL</strong></td><td>Mínimo, por defecto y máximo. El origen manda con <code>Cache-Control</code>; para contenido dinámico, TTL 0</td></tr>
+            <tr><td><strong>Invalidación</strong></td><td>Borra objetos de la caché antes de que expiren (tras un despliegue). Cuesta dinero a partir de cierto volumen: la alternativa limpia es <strong>versionar los nombres de fichero</strong></td></tr>
+            <tr><td><strong>Origin group</strong></td><td>Origen primario + secundario: CloudFront conmuta ante errores 5xx. <strong>Failover de origen</strong> para alta disponibilidad</td></tr>
+            <tr><td><strong>Price class</strong></td><td>Limita las ubicaciones de borde usadas (solo Europa y EE. UU., etc.) para <strong>reducir coste</strong> renunciando a cobertura</td></tr>
+            <tr><td><strong>OAC</strong> (antes OAI)</td><td>Solo CloudFront puede leer el bucket de S3, que permanece privado</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Proteger el contenido</h3>
+        <ul>
+          <li><strong>Signed URLs:</strong> un fichero concreto (una descarga puntual). <strong>Signed Cookies:</strong> varios ficheros a la vez (una serie completa, una zona privada del sitio).</li>
+          <li><strong>Geo-restricción</strong> (lista blanca o negra de países) y <strong>WAF</strong> asociado a la distribución.</li>
+          <li><strong>Field-level encryption:</strong> cifra en el borde campos concretos de un formulario (tarjeta, datos de salud) con una clave pública, de modo que solo la aplicación final puede descifrarlos.</li>
+          <li>Código en el borde: <strong>CloudFront Functions</strong> (JavaScript ligerísimo, milisegundos: reescribir URL, cabeceras, redirecciones) frente a <strong>Lambda@Edge</strong> (más potente y con acceso a la red: manipular peticiones o respuestas al origen).</li>
+        </ul>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>CloudFront también <strong>abarata</strong>: la transferencia de salida desde el borde es más barata que desde EC2 o S3 y no se cobra la transferencia entre el origen de AWS y CloudFront. Si la pregunta menciona a la vez "latencia global" y "coste de salida", suele ser CloudFront.</p></div></div>`
     }
   ],
   preguntas: [
@@ -2004,7 +2382,7 @@ graph TD
   id: "07-seguridad",
   numero: 7,
   titulo: "Seguridad y cumplimiento",
-  resumen: "Cifrado con KMS, gestión de secretos y certificados, WAF/Shield, y servicios de detección y auditoría.",
+  resumen: "KMS a fondo (políticas de clave, rotación, multirregión, CloudHSM), secretos y certificados, WAF/Shield/Firewall Manager, y detección, auditoría y cumplimiento.",
   peso: "~20–25%",
   tiempo: "60–75 min",
   teoria: [
@@ -2038,17 +2416,48 @@ graph TD
           <li><strong>Propiedad de AWS:</strong> opacas, sin visibilidad.</li>
         </ul>
         <div class="callout callout--tip"><div class="callout__icon">i</div><div><p><strong>Cifrado de sobre (envelope):</strong> una clave de datos (DEK) cifra los datos y la CMK cifra la DEK. Permite cifrar grandes volúmenes localmente sin que la CMK salga de KMS (límite directo de KMS: 4 KB).</p></div></div>
+        <h3>Quién puede usar una clave: política de clave e IAM</h3>
+        <ul>
+          <li>Toda clave KMS tiene una <strong>política de clave</strong> (política basada en recurso) y <strong>es obligatoria</strong>: si no te nombra, no puedes usarla aunque IAM te dé <code>kms:*</code>. La política por defecto delega en IAM de la cuenta propietaria.</li>
+          <li>Para el <strong>acceso entre cuentas</strong> hacen falta las dos partes: la política de la clave autoriza a la otra cuenta <em>y</em> esa cuenta concede el permiso a su usuario o rol.</li>
+          <li><strong>Grants:</strong> permisos temporales y granulares que un servicio (EBS, Lambda...) recibe para usar la clave en tu nombre, sin tocar la política.</li>
+          <li>Todo uso de una clave queda registrado en <strong>CloudTrail</strong>: es la razón principal para elegir <strong>SSE-KMS</strong> frente a SSE-S3 cuando piden auditoría.</li>
+        </ul>
+        <h3>Rotación, regiones y tipos de clave</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Escenario</th><th>Qué usar</th></tr></thead>
+          <tbody>
+            <tr><td>Rotar el material criptográfico automáticamente</td><td>Clave gestionada por el cliente con <strong>rotación automática anual</strong> (KMS guarda el material antiguo para descifrar lo ya cifrado; no hay que recifrar nada)</td></tr>
+            <tr><td>Cifrar en varias regiones y poder descifrar en cualquiera</td><td><strong>Claves multirregión</strong> (misma clave replicada). Sin ellas hay que recifrar al copiar un snapshot a otra región</td></tr>
+            <tr><td>La empresa exige generar el material de clave ella misma (BYOK)</td><td><strong>Material de clave importado</strong> (la rotación pasa a ser manual y tú respondes de la copia del material)</td></tr>
+            <tr><td>Firmar o verificar, o cifrar con clave pública fuera de AWS</td><td><strong>Claves asimétricas</strong> (RSA/ECC)</td></tr>
+            <tr><td>Módulo de hardware <strong>exclusivo</strong>, FIPS 140-2 nivel 3, control total de las claves</td><td><strong>CloudHSM</strong> (AWS no tiene acceso; tú gestionas usuarios y copias)</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>Borrar una clave no es inmediato: queda <strong>pendiente de eliminación entre 7 y 30 días</strong> (y puede cancelarse), porque sin ella los datos cifrados son irrecuperables. Si lo que quieres es cortar el acceso ya, <strong>deshabilítala</strong>. Y recuerda: las claves <strong>propiedad de AWS no se pueden compartir</strong>, así que para compartir snapshots o AMIs cifradas necesitas una clave propia.</p></div></div>
         <h3>Secrets Manager vs Parameter Store</h3>
         <div class="tablewrap"><table>
           <thead><tr><th></th><th>Secrets Manager</th><th>Parameter Store</th></tr></thead>
           <tbody>
-            <tr><td>Rotación automática</td><td><strong>Sí</strong> (RDS, etc.)</td><td>No (manual)</td></tr>
-            <tr><td>Coste</td><td>~0,40$/secreto/mes</td><td>Gratis (estándar)</td></tr>
-            <tr><td>Uso</td><td>Credenciales de BD, claves API</td><td>Config de app, valores simples</td></tr>
+            <tr><td>Rotación automática</td><td><strong>Sí</strong>, con una función Lambda (plantillas listas para RDS, Aurora, Redshift y DocumentDB)</td><td>No (manual)</td></tr>
+            <tr><td>Coste</td><td>~0,40$/secreto/mes</td><td>Gratis (nivel estándar)</td></tr>
+            <tr><td>Uso</td><td>Credenciales de BD, claves de API, secretos que deben rotar</td><td>Configuración de aplicación, valores simples, referencias a AMIs</td></tr>
+            <tr><td>Tamaño y niveles</td><td>Hasta 64 KB</td><td>Estándar 4 KB y gratis; <strong>avanzado</strong> 8 KB, con coste y políticas de caducidad</td></tr>
+            <tr><td>Entre cuentas</td><td>Sí, con política de recurso en el secreto</td><td>Sí, con Parameter Store avanzado compartido</td></tr>
           </tbody>
         </table></div>
+        <ul>
+          <li>Ambos cifran con <strong>KMS</strong>; en Parameter Store hay que usar el tipo <strong>SecureString</strong> para que el valor se cifre.</li>
+          <li>El acceso se da con IAM a la aplicación (rol de EC2, Lambda o task de ECS): nunca credenciales en el código o en variables de entorno en claro.</li>
+          <li><strong>RDS Proxy</strong> se integra con Secrets Manager, de modo que la rotación no rompe las conexiones de la aplicación.</li>
+        </ul>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Atajo: si la pregunta dice <strong>"rotar automáticamente"</strong> la contraseña de una base de datos → <strong>Secrets Manager</strong>. Si dice "guardar configuración o un valor sin coste" → <strong>Parameter Store</strong> (SecureString si es sensible).</p></div></div>
         <h3>ACM</h3>
-        <p>Certificados TLS/SSL <strong>gratuitos con renovación automática</strong>, integrados con ALB, CloudFront y API Gateway. Para CloudFront, el certificado debe estar en us-east-1.</p>`
+        <p>Certificados TLS/SSL <strong>gratuitos con renovación automática</strong>, integrados con ALB, NLB, CloudFront y API Gateway. Para <strong>CloudFront el certificado debe estar en us-east-1</strong>; para un ALB, en la misma región del balanceador.</p>
+        <ul>
+          <li>ACM <strong>no exporta</strong> la clave privada de sus certificados públicos: no sirve para instalarlo a mano en una EC2. Para eso está <strong>ACM Private CA</strong> (autoridad certificadora propia para certificados internos, dispositivos IoT o mTLS).</li>
+          <li>La validación puede ser por DNS (recomendada: renueva sola) o por correo.</li>
+        </ul>`
     },
     {
       id: "proteccion",
@@ -2062,7 +2471,21 @@ graph TD
             <tr><td><strong>Shield Advanced</strong></td><td>3/4/7</td><td>DDoS avanzado, soporte 24/7 (~3.000$/mes)</td></tr>
             <tr><td><strong>Firewall Manager</strong></td><td>Varias</td><td>Gestión centralizada de seguridad multicuenta</td></tr>
           </tbody>
-        </table></div>`
+        </table></div>
+        <h3>AWS WAF con detalle</h3>
+        <ul>
+          <li>Se asocia una <strong>Web ACL</strong> a un <strong>CloudFront, ALB, API Gateway, AppSync</strong> o Cognito (no a un NLB ni a una EC2 suelta: a capa 4 no llega).</li>
+          <li><strong>Reglas gestionadas por AWS</strong> y del Marketplace: OWASP Top 10, IP reputation, bots, entradas maliciosas. Es la respuesta rápida a "protegernos de SQLi y XSS sin escribir reglas".</li>
+          <li><strong>Reglas basadas en tasa (rate-based):</strong> bloquean una IP que supere N peticiones en 5 minutos. Sirven contra fuerza bruta, <em>scraping</em> y capa 7.</li>
+          <li>Otros criterios: país, cabeceras, cuerpo, tamaño, expresiones regulares e <strong>IP sets</strong>; acciones de permitir, bloquear, contar o <strong>CAPTCHA</strong>.</li>
+        </ul>
+        <h3>Shield y Firewall Manager</h3>
+        <ul>
+          <li><strong>Shield Standard</strong> está siempre activo y gratis: absorbe los ataques volumétricos habituales (capa 3/4).</li>
+          <li><strong>Shield Advanced</strong> añade detección avanzada, protección de EIP/Global Accelerator/Route 53, informes de ataques, acceso al <strong>Shield Response Team (SRT)</strong> y, muy preguntado, <strong>protección de costes</strong>: AWS te devuelve el gasto de escalado provocado por un ataque. Incluye WAF sin coste adicional.</li>
+          <li><strong>Firewall Manager</strong> aplica y audita reglas de WAF, Shield Advanced, grupos de seguridad y Network Firewall <strong>en todas las cuentas de la organización</strong>, incluidas las que se creen mañana.</li>
+        </ul>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Arquitectura anti-DDoS de libro: <strong>CloudFront/Global Accelerator por delante</strong> (absorben en el borde), <strong>WAF</strong> con reglas gestionadas y de tasa, <strong>Shield Advanced</strong> si el negocio lo justifica, la infraestructura en <strong>subredes privadas</strong> y escalado automático para aguantar el pico.</p></div></div>`
     },
     {
       id: "deteccion",
@@ -2080,7 +2503,14 @@ graph TD
         </table></div>
         <div class="callout callout--key"><div class="callout__icon">★</div><div><p><strong>CloudTrail vs Config:</strong> CloudTrail responde "¿<em>quién</em> hizo qué?" (llamadas API); Config responde "¿está el recurso <em>conforme</em>?" (cambios de configuración y reglas de cumplimiento, con remediación vía Systems Manager).</p></div></div>
         <h3>Systems Manager — Session Manager</h3>
-        <p>Acceso seguro de shell a instancias EC2 <strong>sin claves SSH ni bastión</strong>: usa permisos IAM y el puerto 443, y registra las sesiones en CloudTrail.</p>`
+        <p>Acceso seguro de shell a instancias EC2 <strong>sin claves SSH ni bastión</strong>: usa permisos IAM y el puerto 443, y registra las sesiones en CloudTrail.</p>
+        <h3>Auditoría y cumplimiento</h3>
+        <ul>
+          <li><strong>AWS Artifact:</strong> el portal donde descargar los <strong>informes de cumplimiento</strong> de AWS (SOC 1/2/3, ISO 27001, PCI DSS) y gestionar acuerdos como el BAA de HIPAA. Si la pregunta dice "el auditor pide el informe SOC 2", la respuesta es Artifact.</li>
+          <li><strong>Audit Manager:</strong> recopila evidencias de forma continua y las organiza según un marco (PCI, GDPR, HIPAA) para preparar auditorías.</li>
+          <li><strong>CloudTrail Lake:</strong> almacén gestionado de eventos con consultas SQL y retención de años, como alternativa a llevarse los logs a S3 y consultarlos con Athena.</li>
+          <li><strong>GuardDuty</strong> analiza CloudTrail, VPC Flow Logs y logs de DNS (y opcionalmente EKS, S3, RDS y malware en EBS) <strong>sin instalar agentes</strong>, y sus hallazgos pueden disparar una respuesta automática vía EventBridge + Lambda.</li>
+        </ul>`
     }
   ],
   preguntas: [
@@ -2197,7 +2627,7 @@ graph TD
   id: "08-integracion",
   numero: 8,
   titulo: "Integración de aplicaciones",
-  resumen: "Desacoplar con SQS y SNS (FIFO, orden, cifrado y control de acceso), streaming con Kinesis (aprovisionamiento, orden y seguridad), orquestación con Step Functions, EventBridge y API Gateway.",
+  resumen: "Desacoplar con SQS y SNS (FIFO, DLQ, escalado), Kinesis a fondo (shards, partition key, fan-out, Firehose) y MSK, orquestación con Step Functions, EventBridge y API Gateway.",
   peso: "~10–15%",
   tiempo: "45–60 min",
   teoria: [
@@ -2214,7 +2644,8 @@ graph TD
             <tr><td>Uso</td><td>Desacoplar y amortiguar</td><td>Notificaciones a varios</td><td>Arquitecturas por eventos</td></tr>
           </tbody>
         </table></div>
-        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>¿Varios consumidores para el mismo mensaje? → <strong>SNS</strong> (pub/sub). ¿Amortiguar y procesar a tu ritmo con persistencia? → <strong>SQS</strong>. ¿Enrutar eventos de muchas fuentes a distintos destinos? → <strong>EventBridge</strong>.</p></div></div>`
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>¿Varios consumidores para el mismo mensaje? → <strong>SNS</strong> (pub/sub). ¿Amortiguar y procesar a tu ritmo con persistencia? → <strong>SQS</strong>. ¿Enrutar eventos de muchas fuentes a distintos destinos? → <strong>EventBridge</strong>.</p></div></div>
+        <p>Completan la familia <strong>Amazon MQ</strong> (broker ActiveMQ/RabbitMQ para migrar sistemas existentes) y <strong>Amazon AppFlow</strong>, que mueve datos <strong>entre aplicaciones SaaS y AWS</strong> (Salesforce, Zendesk, Slack, ServiceNow hacia S3, Redshift o Snowflake) sin escribir integraciones: si el enunciado dice "sincronizar datos de Salesforce con S3 sin código", es AppFlow.</p>`
     },
     {
       id: "sqs",
@@ -2243,7 +2674,15 @@ graph TD
         <ul>
           <li><strong>Cifrado en reposo</strong> con claves gestionadas por SQS (<strong>SSE-SQS</strong>) o con <strong>KMS</strong> (SSE-KMS); en tránsito por <strong>HTTPS/TLS</strong>.</li>
           <li><strong>Acceso:</strong> <strong>políticas de IAM</strong> (quién puede enviar/recibir) y <strong>política de cola</strong> basada en recurso (p. ej. permitir que un tema SNS o una cuenta concreta escriba en la cola).</li>
-        </ul>`
+        </ul>
+        <h3>Más ajustes de SQS</h3>
+        <ul>
+          <li><strong>Delay queue:</strong> retrasa la entrega de <em>todos</em> los mensajes nuevos hasta 15 minutos; el <strong>message timer</strong> hace lo mismo para un mensaje concreto.</li>
+          <li><strong>Redrive:</strong> además de enviar a la DLQ tras N intentos, permite <strong>devolver los mensajes de la DLQ a la cola original</strong> una vez corregido el error.</li>
+          <li><strong>FIFO de alto rendimiento:</strong> eleva el límite muy por encima de los 300 mensajes por segundo repartiendo el tráfico en muchos <em>message group ID</em> distintos.</li>
+          <li>Si un mensaje tarda más de lo previsto, el consumidor puede <strong>ampliar el visibility timeout</strong> (ChangeMessageVisibility) para que no lo reciba otro consumidor a la vez.</li>
+        </ul>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Patrón de escalado que cae mucho: un <strong>Auto Scaling group de consumidores</strong> que escala según la métrica <strong>ApproximateNumberOfMessagesVisible</strong> (o mensajes por instancia). Así se absorbe un pico sin perder trabajo y sin sobredimensionar el resto del tiempo.</p></div></div>`
     },
     {
       id: "sns",
@@ -2268,28 +2707,128 @@ graph TD
     },
     {
       id: "kinesis",
-      titulo: "Familia Kinesis",
+      titulo: "Kinesis Data Streams: el modelo mental",
       html: `
+        <p>Kinesis cuesta hasta que se ve la idea central, así que empecemos por ahí. Un <strong>stream</strong> es una <strong>cinta continua de registros dividida en carriles</strong> (los <em>shards</em>). Los <strong>productores</strong> van dejando registros en la cinta y los <strong>consumidores</strong> la leen <strong>por posición</strong>, sin retirar nada: cada consumidor lleva su propio marcador de por dónde va.</p>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p><strong>La diferencia que lo explica todo:</strong> en <strong>SQS</strong> un mensaje se entrega a un consumidor y <strong>se borra</strong>. En <strong>Kinesis</strong> el registro <strong>se queda</strong> durante la retención, así que <strong>varias aplicaciones distintas pueden leer los mismos datos a la vez</strong> y se puede <strong>volver atrás y reprocesarlo todo</strong> (replay). Kinesis no es una cola: es un registro ordenado de eventos.</p></div></div>
+        <h3>Las piezas</h3>
         <div class="tablewrap"><table>
-          <thead><tr><th>Servicio</th><th>Propósito</th></tr></thead>
+          <thead><tr><th>Pieza</th><th>Qué es</th></tr></thead>
           <tbody>
-            <tr><td><strong>Data Streams</strong></td><td>Streaming en tiempo real (procesar datos según llegan). Retención 1–365 días. Se escala con <em>shards</em></td></tr>
-            <tr><td><strong>Data Firehose</strong></td><td>Cargar streams a almacenamiento (S3, Redshift, OpenSearch, Splunk). Totalmente gestionado, sin shards</td></tr>
-            <tr><td><strong>Data Analytics</strong></td><td>Consultas SQL sobre streams en tiempo real</td></tr>
-            <tr><td><strong>Video Streams</strong></td><td>Streaming de vídeo (cámaras, etc.)</td></tr>
+            <tr><td><strong>Registro</strong></td><td>Lo que se escribe: una <strong>partition key</strong> más hasta <strong>1 MB</strong> de datos</td></tr>
+            <tr><td><strong>Shard</strong> (carril)</td><td>La unidad de capacidad y de <strong>orden</strong>. El stream tiene N shards y su capacidad total es N veces la de uno</td></tr>
+            <tr><td><strong>Partition key</strong></td><td>Decide en qué shard cae el registro (por hash). <strong>Misma clave → mismo shard → orden garantizado</strong></td></tr>
+            <tr><td><strong>Número de secuencia</strong></td><td>La posición del registro dentro de su shard; el consumidor guarda por dónde va (<em>checkpoint</em>)</td></tr>
+            <tr><td><strong>Retención</strong></td><td>24 h por defecto, ampliable a <strong>7 días</strong> y hasta <strong>365</strong>. Es la ventana en la que puedes reprocesar</td></tr>
           </tbody>
         </table></div>
-        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>"Procesar millones de registros en tiempo real" → <strong>Data Streams</strong>. "Cargar el stream a S3/Redshift con mínima gestión" → <strong>Firehose</strong>.</p></div></div>
-        <h3>Aprovisionamiento de Data Streams</h3>
+        <h3>Capacidad: los números que hay que saber</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Por cada shard</th><th>Límite</th></tr></thead>
+          <tbody>
+            <tr><td>Escritura</td><td><strong>1 MB/s</strong> o <strong>1.000 registros/s</strong> (lo que se agote antes)</td></tr>
+            <tr><td>Lectura (fan-out estándar)</td><td><strong>2 MB/s compartidos</strong> entre todos los consumidores, y 5 llamadas GetRecords por segundo</td></tr>
+            <tr><td>Lectura (enhanced fan-out)</td><td><strong>2 MB/s para cada consumidor</strong> registrado</td></tr>
+          </tbody>
+        </table></div>
+        <p>De ahí salen los cálculos típicos del examen: si entran <strong>5 MB/s</strong>, necesitas <strong>5 shards</strong>; si son 10.000 registros pequeños por segundo, necesitas <strong>10 shards</strong> aunque el volumen en MB sea ridículo.</p>
+        <h3>Provisioned vs On-Demand</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th></th><th>Provisioned</th><th>On-Demand</th></tr></thead>
+          <tbody>
+            <tr><td>Shards</td><td>Los defines y ajustas tú</td><td>Kinesis los ajusta solo</td></tr>
+            <tr><td>Cuándo</td><td>Carga conocida y estable: sale más barato</td><td><strong>Tráfico impredecible</strong> o a ráfagas, o si no quieres gestionar capacidad</td></tr>
+            <tr><td>Escalado</td><td>Manual: <strong>resharding</strong> (dividir un shard caliente o fusionar dos infrautilizados)</td><td>Automático (duplica capacidad según el pico de los últimos 30 días)</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p><strong>El "shard caliente".</strong> Si eliges una partition key de <strong>baja cardinalidad</strong> (por ejemplo, el país, y el 90% del tráfico es de uno solo), todos esos registros caen en el mismo shard: recibirás <strong>ProvisionedThroughputExceededException</strong> aunque el stream tenga capacidad de sobra. La solución es una clave de <strong>alta cardinalidad</strong> (ID de usuario, ID de dispositivo, ID de pedido), no añadir shards a ciegas.</p></div></div>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Para <strong>ordenar</strong>: en <strong>Kinesis</strong>, misma <strong>partition key</strong>; en <strong>SQS</strong>, cola <strong>FIFO</strong> con <strong>Message Group ID</strong>. En ambos casos el orden se garantiza <em>dentro del grupo</em>, y los grupos distintos van en paralelo.</p></div></div>`
+    },
+    {
+      id: "kinesis-consumo",
+      titulo: "Kinesis: productores, consumidores y fan-out",
+      html: `
+        <h3>Cómo entran los datos</h3>
         <ul>
-          <li><strong>Provisioned:</strong> tú defines y gestionas el número de <strong>shards</strong> (cada shard = 1 MB/s o 1.000 registros/s de entrada). Más barato si conoces la carga.</li>
-          <li><strong>On-Demand:</strong> Kinesis escala los shards automáticamente según el tráfico; ideal para cargas impredecibles.</li>
+          <li><strong>SDK:</strong> <code>PutRecord</code> (uno) y <code>PutRecords</code> (lote de hasta 500). Lo más simple.</li>
+          <li><strong>KPL</strong> (Kinesis Producer Library): agrega y agrupa registros pequeños para exprimir el shard, a costa de algo de latencia de <em>buffer</em>. Para miles de eventos diminutos por segundo.</li>
+          <li><strong>Kinesis Agent:</strong> demonio que vigila ficheros de log en un servidor y los envía sin escribir código.</li>
+          <li>Integraciones directas: <strong>CloudWatch Logs</strong> (filtro de suscripción), IoT Core, DynamoDB Streams a través de Lambda, y SDK móviles.</li>
         </ul>
-        <h3>Orden en Kinesis</h3>
-        <p>Los registros se reparten en shards según su <strong>partition key</strong>. Todos los registros con la <strong>misma partition key</strong> van al mismo shard y se procesan <strong>en orden</strong> (p. ej. usar el <em>ID de pago</em> como partition key ordena los eventos de ese pago). Retención configurable de 1 a 365 días.</p>
-        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Para <strong>ordenar</strong>: en <strong>Kinesis</strong> usa la <strong>partition key</strong>; en <strong>SQS</strong> usa una cola <strong>FIFO</strong> con <strong>Message Group ID</strong>.</p></div></div>
+        <h3>Cómo se leen</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Consumidor</th><th>Cómo funciona</th><th>Cuándo</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Lambda</strong></td><td>Un <em>event source mapping</em> sondea el stream y entrega lotes. La concurrencia es de <strong>una ejecución por shard</strong> (ampliable con el <em>parallelization factor</em>)</td><td>Procesamiento sin servidores, lo más habitual</td></tr>
+            <tr><td><strong>KCL</strong> (Kinesis Client Library)</td><td>Reparte los shards entre varios <em>workers</em> y guarda los <strong>checkpoints en una tabla de DynamoDB</strong> que crea ella misma</td><td>Aplicaciones propias en EC2/contenedores, con reparto y recuperación automáticos</td></tr>
+            <tr><td><strong>Firehose</strong></td><td>Consume el stream y lo entrega a S3, Redshift, OpenSearch...</td><td>Solo quieres almacenar, sin escribir código</td></tr>
+            <tr><td><strong>Managed Service for Apache Flink</strong></td><td>Analítica continua con SQL o Flink (ventanas, agregaciones, detección de patrones)</td><td>Métricas en tiempo real, alertas, detección de anomalías</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>Trampa clásica de la <strong>KCL</strong>: los checkpoints viven en una <strong>tabla de DynamoDB</strong>. Si al rol le falta permiso sobre ella, o la tabla sufre <em>throttling</em>, el consumo se atasca o se reprocesan registros. Y una regla de oro del streaming: el procesamiento debe ser <strong>idempotente</strong>, porque la entrega es <em>al menos una vez</em>.</p></div></div>
+        <h3>Fan-out estándar vs enhanced fan-out — muy preguntado</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th></th><th>Estándar</th><th>Enhanced fan-out</th></tr></thead>
+          <tbody>
+            <tr><td>Modelo</td><td>El consumidor <strong>sondea</strong> (GetRecords)</td><td>Kinesis <strong>empuja</strong> los datos (SubscribeToShard)</td></tr>
+            <tr><td>Ancho de banda</td><td><strong>2 MB/s por shard compartidos</strong> entre todos los consumidores</td><td><strong>2 MB/s por shard y por consumidor</strong></td></tr>
+            <tr><td>Latencia</td><td>~200 ms, y empeora al añadir consumidores</td><td>~70 ms, estable</td></tr>
+            <tr><td>Coste</td><td>Incluido</td><td>Se paga por consumidor y hora</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Si el enunciado dice <strong>"varias aplicaciones consumen el mismo stream"</strong> y aparecen <strong>lecturas limitadas (throttling) o latencia creciente</strong>, la respuesta es <strong>enhanced fan-out</strong>, no más shards. Con dos consumidores o menos, el estándar basta.</p></div></div>
+        <p>Detalles finos: con enhanced fan-out se pueden registrar hasta <strong>20 aplicaciones consumidoras</strong> por stream, y el modo On-Demand admite hasta <strong>el doble del pico de escritura de los últimos 30 días</strong> (si el tráfico se dispara más de golpe, hay throttling durante unos 15 minutos mientras Kinesis reparte los shards).</p>
+        <h3>Vigilar un stream</h3>
+        <ul>
+          <li><strong>GetRecords.IteratorAgeMilliseconds:</strong> la métrica reina. Si crece, <strong>el consumidor va por detrás</strong> del stream y acabarás perdiendo datos cuando venza la retención. Se arregla con más capacidad de proceso (más shards y más Lambdas, o parallelization factor).</li>
+          <li><strong>WriteProvisionedThroughputExceeded</strong> en escritura y <strong>ReadProvisionedThroughputExceeded</strong> en lectura: revisa partition key, número de shards o pasa a On-Demand / enhanced fan-out.</li>
+          <li>Ante <em>throttling</em> puntual, los SDK reintentan con <strong>backoff exponencial</strong>.</li>
+        </ul>
         <h3>Seguridad</h3>
-        <p><strong>Cifrado en reposo</strong> con <strong>KMS</strong> y en tránsito por <strong>HTTPS/TLS</strong>; el acceso se controla con <strong>IAM</strong>.</p>`
+        <p>Cifrado <strong>en reposo con KMS</strong> y en tránsito por <strong>HTTPS/TLS</strong>; permisos con <strong>IAM</strong> (políticas separadas para productores y consumidores) y acceso privado desde la VPC mediante <strong>interface endpoints</strong>.</p>`
+    },
+    {
+      id: "kinesis-firehose",
+      titulo: "Firehose, MSK y qué servicio de mensajería elegir",
+      html: `
+        <h3>Data Firehose: la manguera hacia el almacén</h3>
+        <p>Firehose <strong>no es un stream que se consulta</strong>, es una <strong>tubería de entrega</strong> totalmente gestionada: recoge los datos y los deja en el destino. No hay shards que dimensionar, no hay retención y <strong>no se puede reprocesar</strong>.</p>
+        <ul>
+          <li><strong>Destinos:</strong> S3, Redshift (vía S3), OpenSearch, Splunk y endpoints HTTP de terceros (Datadog, New Relic, MongoDB).</li>
+          <li><strong>Buffer:</strong> entrega cuando se cumple el <strong>tamaño</strong> (1–128 MB, por defecto 5 MB) o el <strong>intervalo</strong> (<strong>0–900 s</strong>, por defecto 300 s hacia S3), lo que ocurra antes. Con intervalo 0 (<em>zero buffering</em>) entrega en segundos; con los valores por defecto es <em>near real-time</em>, del orden de minutos. Bajar de 60 s hacia S3 encarece las peticiones PUT.</li>
+          <li><strong>Transformación:</strong> puede invocar una <strong>Lambda</strong> para limpiar o enriquecer cada lote, <strong>convertir a Parquet u ORC</strong> (barato de consultar luego con Athena), comprimir y particionar por fecha.</li>
+          <li>Los registros que fallan se dejan en un <strong>bucket de errores</strong>, y se puede guardar una copia íntegra del origen en S3.</li>
+        </ul>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>El par de respuestas que más cae: <strong>"procesar en tiempo real con lógica propia y poder reprocesar"</strong> → <strong>Data Streams</strong>. <strong>"Cargar el stream en S3/Redshift/OpenSearch con la mínima gestión posible"</strong> → <strong>Firehose</strong>. Y se combinan: Data Streams para el proceso en vivo y Firehose colgando del mismo stream para archivar en S3.</p></div></div>
+        <h3>El resto de la familia</h3>
+        <ul>
+          <li><strong>Managed Service for Apache Flink</strong> (antes Kinesis Data Analytics): analítica continua sobre el stream con SQL o Flink, con ventanas de tiempo. Salida a otro stream, a Firehose o a Lambda.</li>
+          <li><strong>Kinesis Video Streams:</strong> ingesta de vídeo de cámaras para analizarlo (Rekognition Video) o almacenarlo.</li>
+        </ul>
+        <h3>Amazon MSK (Kafka gestionado)</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th></th><th>Kinesis Data Streams</th><th>MSK</th></tr></thead>
+          <tbody>
+            <tr><td>Unidad</td><td>Shard</td><td>Partición (de un topic)</td></tr>
+            <tr><td>Tamaño de mensaje</td><td>1 MB</td><td>1 MB por defecto, <strong>configurable a más</strong></td></tr>
+            <tr><td>Retención</td><td>1–365 días</td><td><strong>Ilimitada</strong> (según disco o niveles de almacenamiento)</td></tr>
+            <tr><td>Gestión</td><td>Serverless, mínima</td><td>Gestionas configuración, particiones y actualizaciones (o usa <strong>MSK Serverless</strong>)</td></tr>
+            <tr><td>Cuándo</td><td>Nativo de AWS, la opción por defecto</td><td>Ya usas <strong>Kafka</strong>, quieres su ecosistema o migras sin reescribir la aplicación</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Tabla de decisión: mensajería y streaming</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Servicio</th><th>Modelo</th><th>Varios consumidores</th><th>¿Reprocesar?</th><th>Caso típico</th></tr></thead>
+          <tbody>
+            <tr><td><strong>SQS</strong></td><td>Cola: se consume y se borra</td><td>No (un mensaje, un consumidor)</td><td>No</td><td>Desacoplar y amortiguar trabajo</td></tr>
+            <tr><td><strong>SNS</strong></td><td>Pub/sub push</td><td>Sí, en el momento</td><td>No</td><td>Notificar a varios a la vez (fan-out)</td></tr>
+            <tr><td><strong>EventBridge</strong></td><td>Bus con reglas</td><td>Sí</td><td>Con <em>archive and replay</em></td><td>Enrutar eventos por contenido, SaaS, cron</td></tr>
+            <tr><td><strong>Kinesis Data Streams</strong></td><td>Log ordenado y persistente</td><td><strong>Sí, independientes</strong></td><td><strong>Sí</strong></td><td>Telemetría, clics, IoT, analítica en vivo</td></tr>
+            <tr><td><strong>Firehose</strong></td><td>Entrega gestionada</td><td>Un destino</td><td>No</td><td>Volcar el stream a S3/Redshift/OpenSearch</td></tr>
+            <tr><td><strong>MSK</strong></td><td>Kafka</td><td>Sí</td><td>Sí</td><td>Ya hay Kafka o hace falta su ecosistema</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Señales del enunciado: "millones de eventos por segundo", "clics", "telemetría de IoT", "ventana de tiempo", "reproducir los datos" o "varias aplicaciones analizan lo mismo" → <strong>Kinesis</strong>. "Desacoplar", "que no se pierda el trabajo", "cada mensaje lo procesa un worker" → <strong>SQS</strong>.</p></div></div>`
     },
     {
       id: "api-orquestacion",
@@ -2297,6 +2836,23 @@ graph TD
       html: `
         <h3>API Gateway</h3>
         <p>Publica y gestiona APIs (REST, HTTP o WebSocket) con caché, autenticación (IAM, Cognito, Lambda authorizer), throttling y CORS. Se integra con Lambda, endpoints HTTP, servicios AWS y recursos privados vía VPC Link.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Tipo de endpoint</th><th>Dónde vive</th><th>Cuándo</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Edge-optimized</strong></td><td>Se publica a través de las ubicaciones de borde de CloudFront</td><td>Clientes repartidos por el mundo (por defecto en las API REST)</td></tr>
+            <tr><td><strong>Regional</strong></td><td>En la región</td><td>Clientes en la misma región, o si quieres poner tu propio CloudFront delante</td></tr>
+            <tr><td><strong>Privado</strong></td><td>Solo accesible desde la VPC por un <strong>interface endpoint</strong></td><td>APIs internas que no deben salir a internet</td></tr>
+          </tbody>
+        </table></div>
+        <ul>
+          <li><strong>Etapas (stages):</strong> dev, test y prod conviven con su propia configuración y variables; el despliegue <strong>canary</strong> manda un porcentaje del tráfico a la versión nueva.</li>
+          <li><strong>Usage plans y API keys:</strong> asignan cuota (peticiones al mes) y límite de tasa <strong>por cliente</strong>. Es la respuesta a "limitar a cada socio comercial". El <strong>throttling</strong> general protege el backend.</li>
+          <li><strong>Caché por etapa:</strong> guarda las respuestas (TTL configurable) y descarga el backend; se puede invalidar con una cabecera.</li>
+          <li><strong>Autorización:</strong> IAM (servicios y cuentas), <strong>Cognito User Pools</strong> (usuarios de la app) o un <strong>Lambda authorizer</strong> (lógica propia, JWT de terceros).</li>
+          <li><strong>VPC Link</strong> conecta la API con un NLB o un servicio privado dentro de tu VPC.</li>
+          <li><strong>HTTP API</strong> es más barata y rápida que <strong>REST API</strong>, pero REST conserva funciones como las API keys, la caché o la validación de peticiones.</li>
+        </ul>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>El tiempo máximo de integración de API Gateway es de <strong>29 segundos por defecto</strong> (desde 2024 se puede pedir ampliar esa cuota en las REST API regionales y privadas, a costa de reducir el throttle de la cuenta). En el examen, la respuesta sigue siendo: si el trabajo dura más, responde <strong>202 Accepted</strong> y delega en SQS, Step Functions o una Lambda asíncrona.</p></div></div>
         <h3>Step Functions</h3>
         <p>Orquestación serverless como máquina de estados: estados Task, Choice, Parallel, Wait y Map. Flujos <em>Standard</em> (hasta 1 año) o <em>Express</em> (hasta 5 min). Para flujos multi-paso con reintentos y aprobaciones.</p>
         <h3>EventBridge</h3>
@@ -2408,7 +2964,7 @@ graph TD
   id: "09-monitorizacion",
   numero: 9,
   titulo: "Monitorización y gestión",
-  resumen: "CloudWatch (métricas, alarmas, logs), auditoría con CloudTrail, cumplimiento con Config, trazas con X-Ray y Systems Manager.",
+  resumen: "CloudWatch (resolución, alarmas compuestas y anomalías, retención y suscripción de logs), CloudTrail, Config, X-Ray y Systems Manager.",
   peso: "~10–15%",
   tiempo: "45–60 min",
   teoria: [
@@ -2437,7 +2993,31 @@ graph TD
           <li><strong>Logs:</strong> jerarquía Log Group → Log Stream → eventos. Con <em>metric filters</em> se extraen métricas de los logs y con <em>Logs Insights</em> se consultan.</li>
           <li><strong>Eventos (EventBridge):</strong> programación cron o por cambios de estado, con destinos Lambda, SNS, SQS, etc.</li>
         </ul>
-        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>Error clásico: esperar la <strong>memoria de EC2</strong> en las métricas por defecto. No está: requiere el agente de CloudWatch.</p></div></div>`
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>Error clásico: esperar la <strong>memoria de EC2</strong> en las métricas por defecto. No está: requiere el agente de CloudWatch.</p></div></div>
+        <h3>Resolución: cada cuánto se mide</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Modo</th><th>Intervalo</th><th>Coste</th></tr></thead>
+          <tbody>
+            <tr><td>Monitorización básica (por defecto)</td><td>5 minutos</td><td>Gratis</td></tr>
+            <tr><td><strong>Monitorización detallada</strong></td><td>1 minuto</td><td>Con coste. Necesaria para que el <strong>Auto Scaling reaccione rápido</strong></td></tr>
+            <tr><td>Métrica personalizada de <strong>alta resolución</strong></td><td>hasta <strong>1 segundo</strong> (alarmas de 10 o 30 s)</td><td>Con coste</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Alarmas con más juego</h3>
+        <ul>
+          <li><strong>Alarmas compuestas:</strong> combinan varias alarmas con Y/O para <strong>reducir el ruido</strong> ("avisa solo si falla la CPU <em>y</em> el health check").</li>
+          <li><strong>Detección de anomalías:</strong> CloudWatch aprende la banda normal de la métrica y alarma cuando se sale, sin fijar un umbral a mano.</li>
+          <li><strong>Metric math:</strong> combina métricas (por ejemplo, porcentaje de errores sobre el total) y alarma sobre el resultado.</li>
+          <li>Acciones posibles: notificar por SNS, escalar un ASG, o <strong>recuperar o reiniciar</strong> una instancia EC2.</li>
+        </ul>
+        <h3>Logs: retención y salida</h3>
+        <ul>
+          <li>Los grupos de logs tienen <strong>retención indefinida por defecto</strong>: fija una (1 día a 10 años) o pagarás por logs eternos. Es una respuesta típica de optimización de coste.</li>
+          <li><strong>Filtros de suscripción:</strong> envían los logs en tiempo real a <strong>Kinesis Data Streams, Firehose, OpenSearch o Lambda</strong> para analizarlos o archivarlos en S3.</li>
+          <li><strong>Logs Insights</strong> consulta con su propio lenguaje; para análisis barato a largo plazo, exporta a S3 y consulta con <strong>Athena</strong>.</li>
+          <li><strong>Observabilidad entre cuentas:</strong> una cuenta de monitorización puede ver métricas, logs y trazas de las demás.</li>
+          <li>Complementos: <strong>CloudWatch Synthetics</strong> (canarios que simulan a un usuario y detectan la caída antes que él), <strong>RUM</strong> (experiencia real en el navegador) y <strong>Container / Lambda Insights</strong>.</li>
+        </ul>`
     },
     {
       id: "cloudtrail-config",
@@ -2448,6 +3028,8 @@ graph TD
           <li>Registra <strong>eventos de gestión</strong> (plano de control, p. ej. CreateBucket) y, si se habilitan aparte y con coste, <strong>eventos de datos</strong> (p. ej. S3 GetObject, Lambda Invoke).</li>
           <li>El historial de eventos es gratis y se conserva <strong>90 días</strong>; para conservarlo más, crea un <em>trail</em> que entregue a S3.</li>
           <li>Es por región salvo que crees un <strong>trail multirregión</strong>. Incluye validación de integridad de los ficheros de log.</li>
+          <li><strong>Trail de organización:</strong> un único trail creado desde la cuenta de gestión que recoge la actividad de <strong>todas las cuentas</strong> en un bucket central (normalmente en una cuenta de seguridad, con Object Lock para que nadie lo altere).</li>
+          <li><strong>CloudTrail Insights</strong> detecta automáticamente picos anómalos de actividad de la API (por ejemplo, una ráfaga inusual de borrados).</li>
         </ul>
         <h3>Config</h3>
         <p>Registra los cambios de configuración de los recursos y evalúa <strong>reglas de cumplimiento</strong> (gestionadas o personalizadas). Estados: conforme / no conforme. Puede <strong>remediar automáticamente</strong> con Systems Manager Automation.</p>
@@ -2467,7 +3049,14 @@ graph TD
           <li><strong>Parameter Store:</strong> almacena configuración y secretos.</li>
           <li><strong>Automation:</strong> runbooks para tareas comunes (incluida remediación de Config).</li>
         </ul>
-        <p>El <strong>Personal Health Dashboard</strong> avisa de incidencias de AWS que afectan específicamente a <em>tus</em> recursos, con guía de remediación.</p>`
+        <p>El <strong>AWS Health Dashboard</strong> (antes Personal Health Dashboard) avisa de incidencias de AWS que afectan específicamente a <em>tus</em> recursos, con guía de remediación.</p>
+        <h3>Otras piezas de gestión que lista el examen</h3>
+        <ul>
+          <li><strong>Amazon Managed Grafana</strong> y <strong>Amazon Managed Service for Prometheus</strong>: la pareja gestionada para métricas y cuadros de mando al estilo Kubernetes, cuando el equipo ya trabaja con ese ecosistema en vez de con CloudWatch.</li>
+          <li><strong>AWS License Manager:</strong> controla el uso de licencias por socket, núcleo o VM (Windows, Oracle, SQL Server) para no incumplirlas; se apoya en Dedicated Hosts.</li>
+          <li><strong>AWS Well-Architected Tool:</strong> cuestionario guiado que revisa una carga de trabajo frente a los seis pilares y devuelve un plan de mejoras.</li>
+          <li><strong>AWS Service Catalog:</strong> catálogo de productos aprobados (plantillas de CloudFormation) que los equipos despliegan solos dentro de los límites que fija TI.</li>
+        </ul>`
     }
   ],
   preguntas: [
@@ -2592,7 +3181,7 @@ graph TD
   id: "10-migracion",
   numero: 10,
   titulo: "Migración y transferencia",
-  resumen: "Familia Snow, migración de bases de datos con DMS/SCT, DataSync, Storage Gateway, Transfer Family y MGN.",
+  resumen: "Familia Snow, DMS/SCT, DataSync, Storage Gateway, Transfer Family, MGN, descubrimiento con Migration Hub y recuperación ante desastres con DRS.",
   peso: "~8–12%",
   tiempo: "40–50 min",
   teoria: [
@@ -2625,7 +3214,8 @@ graph TD
             <tr><td><strong>Snowmobile</strong></td><td>100 PB</td><td>Escala exabyte (un camión, literalmente)</td></tr>
           </tbody>
         </table></div>
-        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Regla práctica: si transferir por internet llevaría <strong>más de una semana</strong>, usa un dispositivo Snow. Ej.: 80 TB a 100 Mbps ≈ meses; con Snowball ≈ 1 semana (envío incluido).</p></div></div>`
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Regla práctica: si transferir por internet llevaría <strong>más de una semana</strong>, usa un dispositivo Snow. Ej.: 80 TB a 100 Mbps ≈ meses; con Snowball ≈ 1 semana (envío incluido).</p></div></div>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p><strong>Ojo con la realidad de 2026:</strong> AWS ha ido retirando la familia Snow. <strong>Snowcone</strong> se descatalogó y <strong>Snowball Edge ya no se ofrece a clientes nuevos</strong>; AWS remite a <strong>DataSync</strong> (transferencia en línea), a los <strong>AWS Data Transfer Terminal</strong> (llevar tus discos a una sede de AWS y subirlos a gran velocidad) y a <strong>Outposts</strong> para cómputo en el borde. Aun así, <strong>la familia Snow sigue en la lista de servicios del examen</strong> y las preguntas del tipo "80 TB con una línea lenta" se responden igual: dispositivo Snow. Estudia el concepto, pero no te extrañe no encontrarlo ya en la consola.</p></div></div>`
     },
     {
       id: "dms",
@@ -2660,7 +3250,20 @@ graph TD
         <h3>MGN — Application Migration Service</h3>
         <p>Lift-and-shift de servidores a EC2 mediante replicación a nivel de bloque, con pruebas no disruptivas y corte con downtime de minutos. Sustituye al antiguo SMS.</p>
         <h3>Las 6 R</h3>
-        <p>Estrategias de migración: <em>Rehost</em> (lift-and-shift, MGN), <em>Replatform</em>, <em>Repurchase</em> (SaaS), <em>Refactor</em> (rediseño cloud-native), <em>Retire</em> y <em>Retain</em>.</p>`
+        <p>Estrategias de migración: <em>Rehost</em> (lift-and-shift, MGN), <em>Replatform</em>, <em>Repurchase</em> (SaaS), <em>Refactor</em> (rediseño cloud-native), <em>Retire</em> y <em>Retain</em>.</p>
+        <h3>Antes de migrar: descubrir e inventariar</h3>
+        <ul>
+          <li><strong>Application Discovery Service:</strong> inventaría los servidores on-premises, su uso de CPU y memoria y sus <strong>dependencias de red</strong>, para dimensionar el destino y decidir qué se mueve junto.</li>
+          <li><strong>Migration Hub:</strong> el panel único donde se sigue el avance de la migración en todas las herramientas (MGN, DMS) y cuentas.</li>
+        </ul>
+        <h3>AWS Elastic Disaster Recovery (DRS)</h3>
+        <p>Es el <strong>hermano de MGN para recuperación ante desastres</strong>: replica de forma continua los servidores (on-premises, de otra nube o de otra región de AWS) a un <strong>área de preparación barata</strong> en AWS, donde solo se paga almacenamiento y unas instancias mínimas.</p>
+        <ul>
+          <li>Cuando ocurre el desastre, <strong>lanza las instancias reales en minutos</strong> (RTO de minutos, <strong>RPO de segundos</strong>).</li>
+          <li>Permite <strong>ensayar el plan de DR sin afectar a producción</strong> y hacer <em>failback</em> al centro de datos después.</li>
+          <li>Sustituye a CloudEndure Disaster Recovery.</li>
+        </ul>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>No confundir: <strong>MGN</strong> migra servidores <em>una vez</em>; <strong>DRS</strong> mantiene una copia lista <em>siempre</em> para recuperar. Y si la pregunta pide un DR barato "sin rediseñar la aplicación ni mantener una copia encendida" → <strong>DRS</strong> encaja como un guante.</p></div></div>`
     }
   ],
   preguntas: [
@@ -2780,7 +3383,7 @@ graph TD
   id: "11-analitica",
   numero: 11,
   titulo: "Analítica y Machine Learning",
-  resumen: "Athena, Redshift, Glue, EMR, OpenSearch y QuickSight; más un repaso de los servicios de ML de AWS.",
+  resumen: "Athena, Redshift, Glue, EMR, OpenSearch, QuickSight, Lake Formation y Data Exchange; y los servicios de IA gestionados que entran en el examen, con SageMaker y una nota sobre IA generativa.",
   peso: "~8–12%",
   tiempo: "45–60 min",
   teoria: [
@@ -2797,6 +3400,9 @@ graph TD
             <tr><td>Hadoop / Spark (big data)</td><td><strong>EMR</strong></td><td>No</td></tr>
             <tr><td>Búsqueda / analítica de logs</td><td><strong>OpenSearch</strong></td><td>No</td></tr>
             <tr><td>Cuadros de mando / visualización</td><td><strong>QuickSight</strong></td><td>Sí</td></tr>
+            <tr><td>Streaming de eventos compatible con <strong>Kafka</strong></td><td><strong>MSK</strong></td><td>Con MSK Serverless</td></tr>
+            <tr><td>Catálogo, permisos y gobierno de un data lake</td><td><strong>Lake Formation</strong></td><td>Sí</td></tr>
+            <tr><td>Suscribirse a <strong>datos de terceros</strong> ya preparados</td><td><strong>AWS Data Exchange</strong></td><td>Sí</td></tr>
           </tbody>
         </table></div>`
     },
@@ -2824,33 +3430,70 @@ graph TD
       titulo: "QuickSight, OpenSearch y Lake Formation",
       html: `
         <ul>
-          <li><strong>QuickSight:</strong> servicio de BI para cuadros de mando y visualizaciones, con motor en memoria <strong>SPICE</strong> y detección de anomalías por ML. Se conecta a Athena, Redshift, RDS, S3 y más.</li>
+          <li><strong>QuickSight</strong> (AWS lo está renombrando como <strong>Amazon Quick</strong>): servicio de BI para cuadros de mando y visualizaciones, con motor en memoria <strong>SPICE</strong> y detección de anomalías por ML. Se conecta a Athena, Redshift, RDS, S3 y más.</li>
+          <li>En medios, la guía del examen incluye <strong>Kinesis Video Streams</strong> (ingesta de vídeo de cámaras) y <strong>Elastic Transcoder</strong> (conversión de formatos de vídeo); la familia Elemental (MediaConvert, MediaLive...) queda fuera de alcance.</li>
           <li><strong>OpenSearch</strong> (antes Elasticsearch): motor de búsqueda y analítica de logs (stack ELK), búsqueda de texto completo y monitorización. No sustituye a una base relacional ni a un data warehouse.</li>
           <li><strong>Lake Formation:</strong> construye data lakes seguros de forma centralizada, con control de acceso a nivel de columna/fila, usando el catálogo de Glue.</li>
+          <li>Variantes que conviene reconocer: <strong>EMR Serverless</strong> y <strong>EMR on EKS</strong> (Spark sin gestionar clústeres), <strong>Glue DataBrew</strong> (preparación de datos visual, sin código), <strong>consultas federadas de Athena</strong> (SQL sobre RDS, DynamoDB u otras fuentes sin mover los datos), <strong>workgroups de Athena</strong> para separar equipos y limitar el gasto por consulta, y <strong>OpenSearch Serverless</strong>.</li>
           <li><strong>Kinesis Data Analytics:</strong> analítica en tiempo real sobre streams con SQL o Apache Flink.</li>
         </ul>`
     },
     {
       id: "ml",
-      titulo: "Servicios de Machine Learning",
+      titulo: "Servicios de IA gestionados: qué entra en el examen",
       html: `
-        <p>AWS ofrece servicios de ML gestionados (sin experiencia en ML) para casos de uso concretos:</p>
+        <p>La inteligencia artificial <strong>sí entra</strong> en el SAA-C03, pero nunca como ciencia de datos: se pregunta como arquitecto, es decir <strong>"¿qué servicio gestionado resuelve este requisito sin montar nada?"</strong>. Suele ser <strong>una o dos preguntas</strong>, y se resuelven reconociendo la palabra clave del enunciado.</p>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>La guía oficial del examen lista <strong>ocho servicios</strong> en la categoría <em>Machine Learning</em> (consultada en septiembre de 2026). Son exactamente los de la tabla siguiente: con dominarlos a este nivel es suficiente.</p></div></div>
         <div class="tablewrap"><table>
-          <thead><tr><th>Servicio</th><th>Para qué</th></tr></thead>
+          <thead><tr><th>Servicio</th><th>Qué hace</th><th>Señal en el enunciado</th></tr></thead>
           <tbody>
-            <tr><td><strong>Rekognition</strong></td><td>Análisis de imágenes y vídeo (detección de objetos, caras, moderación)</td></tr>
-            <tr><td><strong>Textract</strong></td><td>Extraer texto, tablas y formularios de documentos escaneados (OCR)</td></tr>
-            <tr><td><strong>Comprehend</strong></td><td>NLP: sentimiento, entidades, idioma, frases clave</td></tr>
-            <tr><td><strong>Transcribe</strong></td><td>Voz a texto (transcripción de audio)</td></tr>
-            <tr><td><strong>Polly</strong></td><td>Texto a voz (voces naturales)</td></tr>
-            <tr><td><strong>Translate</strong></td><td>Traducción automática entre idiomas</td></tr>
-            <tr><td><strong>Lex</strong></td><td>Chatbots y asistentes de voz (voz y texto)</td></tr>
-            <tr><td><strong>Kendra</strong></td><td>Búsqueda inteligente en lenguaje natural sobre documentos empresariales</td></tr>
-            <tr><td><strong>Forecast</strong></td><td>Previsión de series temporales (ventas, demanda)</td></tr>
-            <tr><td><strong>Fraud Detector</strong></td><td>Detección de fraude online</td></tr>
-            <tr><td><strong>SageMaker</strong></td><td>Plataforma completa para construir, entrenar y desplegar modelos propios</td></tr>
+            <tr><td><strong>Rekognition</strong></td><td>Análisis de imagen y vídeo: objetos, caras, texto en imágenes, <strong>moderación de contenido</strong></td><td>"detectar contenido inapropiado", "reconocer caras", "etiquetar fotos"</td></tr>
+            <tr><td><strong>Textract</strong></td><td><strong>OCR</strong> que extrae texto, <strong>tablas y campos de formulario</strong> de documentos escaneados y PDF</td><td>"digitalizar facturas", "formularios en papel", "extraer datos de documentos"</td></tr>
+            <tr><td><strong>Comprehend</strong></td><td>NLP: <strong>sentimiento</strong>, entidades, idioma, frases clave, temas; detecta <strong>PII</strong> en texto</td><td>"analizar opiniones de clientes", "clasificar tickets", "extraer entidades"</td></tr>
+            <tr><td><strong>Transcribe</strong></td><td>Voz a texto, con hablantes, marcas de tiempo y filtrado de palabras</td><td>"subtítulos", "transcribir llamadas o reuniones"</td></tr>
+            <tr><td><strong>Polly</strong></td><td>Texto a voz con voces naturales (y SSML)</td><td>"leer el contenido en voz alta", "generar audio"</td></tr>
+            <tr><td><strong>Translate</strong></td><td>Traducción automática entre idiomas</td><td>"web multi-idioma", "traducir opiniones al inglés"</td></tr>
+            <tr><td><strong>Lex</strong></td><td><strong>Chatbots</strong> conversacionales de voz y texto (el motor de Alexa); se integra con Lambda y Connect</td><td>"asistente virtual", "bot de atención al cliente"</td></tr>
+            <tr><td><strong>SageMaker AI</strong></td><td>Plataforma completa para <strong>construir, entrenar y desplegar modelos propios</strong></td><td>"entrenar con nuestros datos históricos", "modelo personalizado"</td></tr>
           </tbody>
-        </table></div>`
+        </table></div>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p><strong>La trampa que se repite:</strong> si el enunciado dice <em>"sin experiencia en machine learning"</em>, <em>"sin equipo de ciencia de datos"</em> o <em>"con el mínimo esfuerzo de desarrollo"</em> → <strong>servicio gestionado</strong> (Rekognition, Textract, Comprehend...). Si dice <em>"entrenar un modelo con nuestros propios datos"</em> o <em>"algoritmo a medida"</em> → <strong>SageMaker</strong>. Elegir SageMaker cuando basta una API gestionada es la respuesta incorrecta más frecuente.</p></div></div>
+        <h3>Combinaciones que caen</h3>
+        <ul>
+          <li><strong>Moderar imágenes que suben los usuarios:</strong> subida a S3 → <strong>evento de S3</strong> → Lambda → <strong>Rekognition</strong> → resultado a DynamoDB y aviso por SNS.</li>
+          <li><strong>Analítica de un centro de llamadas:</strong> audio en S3 → <strong>Transcribe</strong> (voz a texto) → <strong>Comprehend</strong> (sentimiento y entidades) → S3/Athena o QuickSight para el cuadro de mando.</li>
+          <li><strong>Digitalizar formularios:</strong> <strong>Textract</strong> para extraer los campos y <strong>Amazon A2I</strong> (Augmented AI) para mandar a <strong>revisión humana</strong> lo que baje de cierta confianza.</li>
+          <li><strong>Contenido global:</strong> <strong>Translate</strong> para traducir y <strong>Polly</strong> para generar el audio en cada idioma.</li>
+          <li><strong>Documentos con datos personales:</strong> <strong>Comprehend</strong> detecta y redacta PII en texto; <strong>Macie</strong> es el que busca datos sensibles <em>en S3</em>. No confundirlos.</li>
+        </ul>
+        <h3>SageMaker desde la óptica del arquitecto</h3>
+        <p>De SageMaker el examen no pide algoritmos, sino <strong>cómo se sirve el modelo</strong> y cuánto cuesta:</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Forma de inferencia</th><th>Cómo funciona</th><th>Cuándo</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Endpoint en tiempo real</strong></td><td>Instancias siempre encendidas tras un endpoint HTTPS, con auto scaling</td><td>Latencia de milisegundos y tráfico constante</td></tr>
+            <tr><td><strong>Serverless Inference</strong></td><td>Escala a cero y arranca al llegar la petición</td><td>Tráfico <strong>intermitente</strong> que tolera algo de arranque en frío; evita pagar 24/7</td></tr>
+            <tr><td><strong>Asynchronous Inference</strong></td><td>Cola interna, payloads grandes y respuestas de hasta minutos; puede escalar a cero</td><td>Ficheros grandes o inferencia lenta sin bloquear al cliente</td></tr>
+            <tr><td><strong>Batch Transform</strong></td><td>Procesa un conjunto de datos completo y termina; no hay endpoint</td><td><strong>Lotes periódicos</strong>: la opción más barata si no hace falta respuesta inmediata</td></tr>
+          </tbody>
+        </table></div>
+        <ul>
+          <li><strong>Coste:</strong> un endpoint en tiempo real olvidado factura sin parar; para entrenar, <strong>Managed Spot Training</strong> ahorra hasta un 90%.</li>
+          <li><strong>Red y seguridad:</strong> estos servicios se llaman por su API pública. Para que el tráfico no salga a internet, usa <strong>interface endpoints (PrivateLink)</strong> desde la VPC; cifra los datos de S3 y los volúmenes con <strong>KMS</strong>, y controla el acceso con <strong>IAM</strong> (más roles de ejecución para los trabajos).</li>
+        </ul>
+        <h3>¿Y la IA generativa (Bedrock, Amazon Q)?</h3>
+        <p>Conviene saber dónde está cada cosa para no estudiar de más:</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Servicio</th><th>Situación en la guía del examen</th><th>Qué es, en una línea</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Bedrock</strong></td><td><strong>No aparece</strong> en la lista de servicios del examen (ni dentro ni fuera de alcance)</td><td>Acceso gestionado a modelos fundacionales por API, con RAG y agentes</td></tr>
+            <tr><td><strong>Amazon Q</strong></td><td>No aparece</td><td>Asistente de IA para empresa y para desarrollo</td></tr>
+            <tr><td><strong>Kendra</strong></td><td>No aparece en ninguna de las dos listas</td><td>Búsqueda inteligente en lenguaje natural sobre documentos de la empresa</td></tr>
+            <tr><td><strong>Forecast</strong> · <strong>Fraud Detector</strong></td><td>No aparecen</td><td>Previsión de series temporales · detección de fraude online</td></tr>
+            <tr><td><strong>Personalize</strong></td><td><strong>Explícitamente fuera de alcance</strong></td><td>Motor de recomendaciones</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>La lista oficial es <strong>no exhaustiva y cambia</strong>, y los bancos de preguntas más recientes empiezan a mencionar <strong>Bedrock</strong>. Con reconocer la frase "acceso a modelos fundacionales mediante API, sin gestionar infraestructura" vas servido: no merece la pena estudiarlo a fondo para este examen, pero tampoco te debe sonar a chino. En cambio, <strong>Personalize está fuera de alcance</strong>: no le dediques tiempo.</p></div></div>`
     }
   ],
   preguntas: [
@@ -2946,7 +3589,7 @@ graph TD
   id: "12-patrones",
   numero: 12,
   titulo: "Patrones de arquitectura",
-  resumen: "Tres niveles, alta disponibilidad, recuperación ante desastres, desacoplamiento, serverless y defensa en profundidad.",
+  resumen: "Tres niveles, alta disponibilidad, recuperación ante desastres a fondo (RTO/RPO e implementación), desacoplamiento, serverless, estrategias de despliegue e infraestructura como código.",
   peso: "~10–15%",
   tiempo: "45–60 min",
   teoria: [
@@ -2986,7 +3629,43 @@ graph TD
             <tr><td><strong>Multi-site activo-activo</strong></td><td>Casi cero</td><td>El más alto</td></tr>
           </tbody>
         </table></div>
-        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Para RPO de ~1 h y RTO de ~4 h, <strong>Pilot Light</strong> suele ser lo más rentable. Multi-site sería sobredimensionar; backup/restore podría no cumplir el RTO.</p></div></div>`
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Para RPO de ~1 h y RTO de ~4 h, <strong>Pilot Light</strong> suele ser lo más rentable. Multi-site sería sobredimensionar; backup/restore podría no cumplir el RTO.</p></div></div>
+        <h3>Primero, entender RTO y RPO</h3>
+        <ul>
+          <li><strong>RPO</strong> (Recovery Point Objective): <em>cuántos datos puedo perder</em>, medido en tiempo hacia atrás desde el desastre. Lo determina la <strong>frecuencia de la copia o de la replicación</strong>. Backups cada 24 h → RPO de 24 h.</li>
+          <li><strong>RTO</strong> (Recovery Time Objective): <em>cuánto puede estar caído el servicio</em>. Lo determina lo que tardas en <strong>levantar</strong> todo.</li>
+        </ul>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Regla para elegir en el examen: el enunciado casi siempre <strong>da las dos cifras</strong>. Busca la opción <strong>más barata que las cumpla</strong>, no la mejor en absoluto. RPO de horas → backups. RPO de minutos → replicación. <strong>RPO de segundos y RTO de minutos</strong> → warm standby o activo-activo.</p></div></div>
+        <h3>Cómo se implementa cada estrategia</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Estrategia</th><th>Qué hay encendido en la región de DR</th><th>Piezas de AWS</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Backup y restauración</strong><br>RTO horas · RPO horas</td><td>Nada: solo copias</td><td><strong>AWS Backup</strong> con copia entre regiones, snapshots de EBS/RDS copiados, <strong>S3 CRR</strong>, AMIs copiadas, plantilla de CloudFormation lista</td></tr>
+            <tr><td><strong>Pilot Light</strong><br>RTO decenas de minutos · RPO minutos</td><td>Solo el <strong>núcleo de datos</strong>: la base de datos replicando. El cómputo, creado pero apagado</td><td><strong>Réplica de lectura cross-region</strong> o <strong>Aurora Global Database</strong>, datos en S3 replicados, AMIs y plantillas listas para escalar el ASG a la hora de la verdad</td></tr>
+            <tr><td><strong>Warm Standby</strong><br>RTO minutos · RPO segundos</td><td>Una copia <strong>completa pero reducida</strong> y funcionando</td><td>Todo desplegado al mínimo (ASG con 1 instancia), BD replicando; el corte es <strong>escalar y cambiar el DNS</strong></td></tr>
+            <tr><td><strong>Multi-site activo-activo</strong><br>RTO casi cero · RPO casi cero</td><td>Las dos regiones sirviendo tráfico</td><td><strong>Route 53</strong> con latencia o ponderación, <strong>DynamoDB Global Tables</strong> o Aurora Global, <strong>Global Accelerator</strong>. El más caro y el más complejo</td></tr>
+          </tbody>
+        </table></div>
+        <h3>La capa de datos manda</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Dato</th><th>Mecanismo de DR</th><th>RPO aproximado</th></tr></thead>
+          <tbody>
+            <tr><td>RDS</td><td>Snapshots copiados a otra región / <strong>réplica de lectura cross-region</strong> que se <strong>promociona</strong></td><td>Horas / segundos-minutos</td></tr>
+            <tr><td>Aurora</td><td><strong>Global Database</strong> (replicación &lt; 1 s, promoción de la región secundaria en ~1 min)</td><td>Segundos</td></tr>
+            <tr><td>DynamoDB</td><td><strong>Global Tables</strong> (activo-activo) y <strong>PITR</strong></td><td>Segundos</td></tr>
+            <tr><td>S3</td><td><strong>CRR</strong>, con <strong>RTC</strong> si hace falta garantía de 15 minutos</td><td>Minutos</td></tr>
+            <tr><td>EBS / EC2</td><td>Snapshots y AMIs copiadas (con DLM o AWS Backup), o <strong>DRS</strong> para replicación continua</td><td>Horas / segundos</td></tr>
+            <tr><td>Servidores on-premises o de otra nube</td><td><strong>AWS Elastic Disaster Recovery (DRS)</strong></td><td>Segundos</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Conmutar y volver</h3>
+        <ul>
+          <li>El interruptor suele ser <strong>Route 53 con política de failover</strong> y health checks: el DNS deja de apuntar a la región caída. Ojo al <strong>TTL</strong>: uno alto retrasa el cambio, así que en escenarios de DR se usan TTL bajos (60 s).</li>
+          <li><strong>Global Accelerator</strong> conmuta más rápido que el DNS, porque la IP no cambia y el desvío ocurre en la red de AWS.</li>
+          <li>Todo lo que se levante en la otra región debe existir allí de antemano: <strong>AMIs y snapshots copiados</strong>, certificados de ACM emitidos en esa región, plantillas de <strong>CloudFormation o StackSets</strong> y <strong>cuotas de servicio</strong> suficientes (un límite bajo arruina el RTO).</li>
+          <li><strong>Un plan de DR sin ensayar no existe:</strong> hay que probar el failover periódicamente (DRS y Aurora Global permiten ensayos sin tocar producción).</li>
+        </ul>
+        <div class="callout callout--warn"><div class="callout__icon">!</div><div><p>No confundas <strong>alta disponibilidad</strong> con <strong>DR</strong>: Multi-AZ (dos AZ de la misma región) es HA y cubre el fallo de un centro de datos. El DR cubre la pérdida de <strong>una región entera</strong> y siempre implica <strong>otra región</strong>. Y un backup en el mismo bucket que los datos no es DR: hay que sacarlo de la región, e idealmente de la cuenta.</p></div></div>`
     },
     {
       id: "desacoplar",
@@ -3006,9 +3685,57 @@ graph TD
       html: `
         <ul>
           <li><strong>Serverless (S3 + CloudFront + API Gateway + Lambda + DynamoDB):</strong> escala automáticamente, pago por uso y mínima gestión; ideal para tráfico impredecible.</li>
+          <li><strong>AWS Amplify</strong> empaqueta ese frontal: hospedaje de la web o app móvil con CI/CD, autenticación con Cognito y API con AppSync o API Gateway. <strong>Device Farm</strong> la prueba en dispositivos reales.</li>
           <li><strong>Caché en capas:</strong> CloudFront (borde), caché de API Gateway, ElastiCache/DAX (datos). El patrón <em>cache-aside</em> (lazy loading) con ElastiCache es ideal para cargas de mucha lectura.</li>
           <li><strong>Defensa en profundidad:</strong> combina <strong>WAF + Shield + grupos de seguridad + NACL + cifrado KMS</strong>. Una sola capa no basta.</li>
         </ul>`
+    },
+    {
+      id: "despliegues",
+      titulo: "Estrategias de despliegue sin cortar el servicio",
+      html: `
+        <div class="tablewrap"><table>
+          <thead><tr><th>Estrategia</th><th>Cómo funciona</th><th>Coste y riesgo</th></tr></thead>
+          <tbody>
+            <tr><td><strong>All at once</strong></td><td>Se actualiza todo de golpe</td><td>El más barato y rápido, pero <strong>hay corte</strong> y la vuelta atrás es lenta</td></tr>
+            <tr><td><strong>Rolling</strong></td><td>Por lotes de instancias</td><td>Sin capacidad extra, pero conviven dos versiones y baja la capacidad durante el proceso</td></tr>
+            <tr><td><strong>Rolling con lote adicional</strong></td><td>Añade instancias antes de actualizar</td><td>Mantiene la capacidad total; algo más de coste</td></tr>
+            <tr><td><strong>Immutable</strong></td><td>Levanta instancias <strong>nuevas</strong> con la versión nueva y descarta las viejas</td><td>Vuelta atrás inmediata, sin mezclar versiones; duplica la capacidad un rato</td></tr>
+            <tr><td><strong>Blue/Green</strong></td><td>Dos entornos completos; se <strong>cambia el tráfico</strong> del azul al verde</td><td>Rollback en segundos; el doble de infraestructura durante el cambio</td></tr>
+            <tr><td><strong>Canary</strong></td><td>Se manda un <strong>pequeño porcentaje</strong> del tráfico a la versión nueva y se va subiendo</td><td>El menor riesgo: se detecta el fallo con pocos usuarios afectados</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Con qué se hace en AWS</h3>
+        <ul>
+          <li><strong>ALB con grupos de destino ponderados:</strong> el mecanismo natural para blue/green y canary en EC2 o contenedores.</li>
+          <li><strong>Route 53 ponderado:</strong> reparto porcentual a nivel de DNS, útil entre entornos o regiones enteras (cuidado con el TTL y la caché del cliente).</li>
+          <li><strong>CodeDeploy:</strong> automatiza rolling, blue/green y canary en EC2, ECS y Lambda, con <strong>rollback automático</strong> si salta una alarma de CloudWatch. (La guía del examen lo marca <em>fuera de alcance</em>, como el resto de servicios Code*: entiende el concepto, no lo estudies a fondo.)</li>
+          <li><strong>Lambda con alias ponderados</strong> y <strong>etapas canary de API Gateway</strong> para el mundo serverless.</li>
+          <li><strong>Elastic Beanstalk</strong> implementa estas políticas de serie (all at once, rolling, rolling con lote adicional, immutable y blue/green mediante <em>swap de URL</em> entre entornos).</li>
+        </ul>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Atajos: "cero tiempo de inactividad y poder revertir al instante" → <strong>blue/green</strong>. "Probar con un 5% de usuarios reales antes de desplegar del todo" → <strong>canary</strong>. "Sin capacidad extra y aceptamos ir poco a poco" → <strong>rolling</strong>. "Que no convivan dos versiones" → <strong>immutable</strong>.</p></div></div>`
+    },
+    {
+      id: "iac",
+      titulo: "Infraestructura como código: CloudFormation",
+      html: `
+        <p><strong>CloudFormation</strong> describe la infraestructura en una plantilla (YAML o JSON) y la crea, actualiza y elimina como un <strong>stack</strong>, de forma repetible y con el mismo resultado en cualquier cuenta o región. Es gratis: solo pagas los recursos.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Concepto</th><th>Para qué</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Change set</strong></td><td>Muestra <strong>qué va a cambiar</strong> (y qué recursos se van a reemplazar) antes de aplicar. Evita sorpresas en producción</td></tr>
+            <tr><td><strong>StackSets</strong></td><td>Despliega el mismo stack en <strong>muchas cuentas y regiones</strong> desde la cuenta de gestión: la forma de aplicar una base común a toda la organización</td></tr>
+            <tr><td><strong>Nested stacks</strong></td><td>Trocea una plantilla enorme en piezas reutilizables (una VPC estándar, un ALB estándar)</td></tr>
+            <tr><td><strong>DeletionPolicy: Retain</strong> / <strong>Snapshot</strong></td><td>Evita que al borrar el stack desaparezca una base de datos o un bucket: se conserva o se guarda un snapshot</td></tr>
+            <tr><td><strong>Drift detection</strong></td><td>Detecta los cambios hechos <strong>a mano</strong> por consola que ya no coinciden con la plantilla</td></tr>
+            <tr><td><strong>Parámetros, Mappings y Outputs</strong></td><td>Reutilizar la plantilla entre entornos y exportar valores a otros stacks</td></tr>
+          </tbody>
+        </table></div>
+        <ul>
+          <li>Si una actualización falla, CloudFormation hace <strong>rollback automático</strong> al estado anterior.</li>
+          <li>Ecosistema: <strong>AWS SAM</strong> (sintaxis corta para serverless), <strong>CDK</strong> (infraestructura en Python o TypeScript que se compila a CloudFormation; <em>fuera del alcance oficial del examen</em>) y <strong>Service Catalog</strong> (catálogo de plantillas aprobadas que los equipos despliegan solos).</li>
+        </ul>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>En DR, una plantilla de CloudFormation es lo que convierte "tenemos los backups" en "levantamos el entorno entero en otra región en minutos". Y en gobierno, <strong>StackSets</strong> es la respuesta a "aplicar la misma configuración base a todas las cuentas nuevas".</p></div></div>`
     }
   ],
   preguntas: [
@@ -3170,7 +3897,7 @@ graph TD
   id: "13-costes",
   numero: 13,
   titulo: "Optimización de costes",
-  resumen: "Modelos de precios, Savings Plans, Spot, clases de S3, right-sizing y herramientas de gestión de costes.",
+  resumen: "Modelos de precios, Savings Plans, Spot, clases de S3, right-sizing, herramientas de gestión de costes y el coste de la transferencia de datos.",
   peso: "~10–15%",
   tiempo: "40–50 min",
   teoria: [
@@ -3233,7 +3960,35 @@ graph TD
             <tr><td><strong>Organizations</strong></td><td>Facturación consolidada y descuentos por volumen</td></tr>
           </tbody>
         </table></div>
-        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p><strong>Right-sizing:</strong> ajusta el tamaño de EC2 y la memoria de Lambda al uso real. Como Lambda cobra por GB-segundo, sobredimensionar la memoria multiplica el coste. El <strong>Instance Scheduler</strong> apaga entornos de dev fuera del horario laboral (≈73% de ahorro).</p></div></div>`
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p><strong>Right-sizing:</strong> ajusta el tamaño de EC2 y la memoria de Lambda al uso real. Como Lambda cobra por GB-segundo, sobredimensionar la memoria multiplica el coste. El <strong>Instance Scheduler</strong> apaga entornos de dev fuera del horario laboral (≈73% de ahorro).</p></div></div>
+        <ul>
+          <li><strong>Compute Optimizer:</strong> recomienda, con datos reales de uso, el tipo de instancia EC2, el tamaño del ASG, el volumen EBS y la memoria de Lambda adecuados. Es la herramienta específica de <em>right-sizing</em>.</li>
+          <li><strong>Cost and Usage Report (CUR):</strong> el detalle de facturación más granular (hasta por hora y por recurso) que se entrega a S3 para analizarlo con Athena o QuickSight.</li>
+          <li><strong>Categorías de coste</strong> y <strong>Billing Conductor</strong> para repartir el gasto por equipo o cliente cuando las etiquetas no bastan.</li>
+        </ul>`
+    },
+    {
+      id: "transferencia-datos",
+      titulo: "El coste que se olvida: transferencia de datos",
+      html: `
+        <p>Media docena de preguntas del examen se resuelven sabiendo <strong>cuándo se paga por mover datos</strong>. La regla base: <strong>entrar en AWS es gratis; salir a internet se paga</strong>, y dentro de AWS depende de cuánta distancia recorra el tráfico.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Trayecto</th><th>¿Se paga?</th></tr></thead>
+          <tbody>
+            <tr><td>Internet → AWS (entrada)</td><td><strong>Gratis</strong></td></tr>
+            <tr><td>AWS → internet (salida)</td><td><strong>Sí</strong>, y es lo más caro. Hay una capa gratuita mensual</td></tr>
+            <tr><td>Dentro de la <strong>misma AZ</strong> por IP <strong>privada</strong></td><td><strong>Gratis</strong></td></tr>
+            <tr><td>Dentro de la misma AZ por IP <strong>pública o elástica</strong></td><td><strong>Sí</strong>: usa siempre la IP privada o el DNS interno</td></tr>
+            <tr><td>Entre AZ de la misma región</td><td>Sí, en los dos sentidos (también en VPC Peering entre AZ)</td></tr>
+            <tr><td>Entre regiones</td><td>Sí, más caro que entre AZ</td></tr>
+            <tr><td>Hacia <strong>CloudFront</strong> desde un origen de AWS</td><td><strong>Gratis</strong>, y la salida desde el borde es más barata que desde EC2 o S3</td></tr>
+            <tr><td>A través de <strong>NAT Gateway</strong></td><td>Sí: por hora <strong>y por GB procesado</strong></td></tr>
+            <tr><td>Por un <strong>Gateway Endpoint</strong> (S3 y DynamoDB)</td><td><strong>Gratis</strong>; el interface endpoint cobra por hora y por GB</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout callout--key"><div class="callout__icon">★</div><div><p>Optimizaciones que caen tal cual: poner <strong>CloudFront delante</strong> para abaratar la salida; añadir un <strong>Gateway Endpoint de S3</strong> para que el tráfico deje de pasar (y pagar) por el <strong>NAT Gateway</strong>; mantener el tráfico <strong>dentro de la misma AZ</strong> entre capas conversadoras; y comprimir o usar formatos columnares para mover menos datos.</p></div></div>
+        <p>No todo el coste es por GB: S3 también cobra <strong>por petición</strong>. Subir un millón de ficheros diminutos de uno en uno sale más caro (y más lento) que <strong>agruparlos en lotes</strong> o comprimirlos antes de subir; lo mismo ocurre al bajar el intervalo de entrega de Firehose por debajo de 60 s, que multiplica las peticiones PUT.</p>
+        <div class="callout callout--tip"><div class="callout__icon">i</div><div><p>Otros ahorros silenciosos: <strong>IP elásticas sin asociar</strong> y IPv4 públicas (se facturan), <strong>volúmenes EBS huérfanos</strong> y snapshots antiguos, <strong>subidas multiparte incompletas</strong> en S3, <strong>logs de CloudWatch sin retención</strong> y balanceadores olvidados. Trusted Advisor y Cost Explorer los sacan a la luz.</p></div></div>`
     }
   ],
   preguntas: [
